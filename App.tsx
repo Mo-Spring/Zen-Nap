@@ -1,3 +1,5 @@
+[file name]: App.tsx
+[file content begin]
 import React, { useState, useEffect, useRef } from 'react';
 import { Background } from './components/Background';
 import { CircularTimer } from './components/CircularTimer';
@@ -13,7 +15,7 @@ const MODES: NapMode[] = [
   {
     id: 'custom',
     name: '自定义',
-    durationMinutes: 30,
+    durationMinutes: 30, // 这只是一个默认值，实际使用时会被 customDuration 覆盖
     themeColor: '#94a3b8',
     accentColor: 'bg-slate-400',
     iconType: 'custom',
@@ -133,6 +135,8 @@ export default function App() {
   const isDragging = useRef(false);
   
   const currentMode = MODES[selectedModeIndex];
+  
+  // 关键修复：动态计算显示时长，自定义模式使用 customDuration，其他模式使用预设值
   const displayDuration = currentMode.id === 'custom' ? customDuration : currentMode.durationMinutes;
 
   // --- EFFECTS ---
@@ -345,7 +349,7 @@ export default function App() {
   };
 
   const startTimerInternal = () => {
-    const durationMin = displayDuration;
+    const durationMin = displayDuration; // 关键修复：使用正确的 displayDuration
     const durationSec = durationMin * 60;
     
     setTimeLeft(durationSec);
@@ -1080,3 +1084,4 @@ export default function App() {
     </div>
   );
 }
+[file content end]
