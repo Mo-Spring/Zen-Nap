@@ -367,7 +367,7 @@ export default function App() {
 
   const stopTimer = () => {
     if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrame Refuge.current);
+        cancelAnimationFrame(animationFrameRefuge.current);
         animationFrameRef.current = null;
     }
     if (stopIntervalRef.current) {
