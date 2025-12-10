@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Background } from './components/Background';
 import { CircularTimer } from './components/CircularTimer';
@@ -98,33 +97,36 @@ export default function App() {
   // Audio Playback State
   const [playingAudioPath, setPlayingAudioPath] = useState<string | null>(null);
   
+  // Timer State
+  const [timeLeft, setTimeLeft] = useState(0);
+  const [endTime, setEndTime] = useState<Date | null>(null);
+  const [startTime, setStartTime] = useState<Date | null>(null);
+  const [sessionStats, setSessionStats] = useState<SessionStats | null>(null);
+  
+  // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const timerRef = useRef<number | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
+  const lastUpdateRef = useRef<number>(Date.now());
+  
+  // Gesture Refs
+  const [slideY, setSlideY] = useState(0);
+  const dragStartY = useRef<number | null>(null);
+  const touchStartX = useRef<number | null>(null);
+  const touchEndX = useRef<number | null>(null);
+  const isDragging = useRef(false);
+  
+  // Long Press to Stop Refs
+  const [stopProgress, setStopProgress] = useState(0);
+  const stopIntervalRef = useRef<number | null>(null);
+  
+  // Upload Context
   const [activeUploadContext, setActiveUploadContext] = useState<{
       field: 'wakeUp' | 'refresh' | 'guide';
       modeId?: string;
   } | null>(null);
-
-  const [timeLeft, setTimeLeft] = useState(0);
-  const [endTime, setEndTime] = useState<Date | null>(null);
-  const [sessionStats, setSessionStats] = useState<SessionStats | null>(null);
-  
-  const timerRef = useRef<number | null>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  
-  // Gestures
-  const [slideY, setSlideY] = useState(0);
-  
-  const dragStartY = useRef<number | null>(null);
-
-  // Long Press to Stop Logic
-  const [stopProgress, setStopProgress] = useState(0);
-  const stopIntervalRef = useRef<number | null>(null);
-  
-  // Swipe Gestures for mode change
-  const touchStartX = useRef<number | null>(null);
-  const touchEndX = useRef<number | null>(null);
-  const isDragging = useRef(false);
 
   const currentMode = MODES[selectedModeIndex];
   // Determine effective duration based on mode
@@ -161,23 +163,43 @@ export default function App() {
     localStorage.setItem('zenNapSettings', JSON.stringify(settings));
   }, [globalWakeUpMusic, globalRefreshMusic, modeGuideMusic]);
 
+  // 修复的计时器逻辑：使用 requestAnimationFrame 避免锁屏节流
   useEffect(() => {
-    if (appState === AppState.RUNNING && timeLeft > 0) {
-      timerRef.current = window.setInterval(() => {
-        setTimeLeft((prev) => {
-          if (prev <= 1) {
-            finishTimer();
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+    if (appState === AppState.RUNNING && startTime && timeLeft > 0) {
+      lastUpdateRef.current = Date.now();
+      
+      const updateTimer = () => {
+        if (!startTime) {
+          finishTimer();
+          return;
+        }
+        
+        const now = Date.now();
+        const elapsedSeconds = Math.floor((now - startTime.getTime()) / 1000);
+        const totalDurationSeconds = displayDuration * 60;
+        const remaining = Math.max(0, totalDurationSeconds - elapsedSeconds);
+        
+        setTimeLeft(remaining);
+        
+        if (remaining <= 0) {
+          finishTimer();
+        } else {
+          animationFrameRef.current = requestAnimationFrame(updateTimer);
+        }
+      };
+      
+      animationFrameRef.current = requestAnimationFrame(updateTimer);
     }
+    
     return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
       if (timerRef.current) clearInterval(timerRef.current);
       if (stopIntervalRef.current) clearInterval(stopIntervalRef.current);
     };
-  }, [appState]);
+  }, [appState, startTime, displayDuration]);
 
   // --- AUDIO HANDLERS ---
   
@@ -190,20 +212,41 @@ export default function App() {
       }
 
       // If already playing this track, pause it (Toggle)
-      if (playingAudioPath === trackPath) {
+      if (playingAudioPath === trackPath && !audioRef.current.paused) {
           audioRef.current.pause();
           setPlayingAudioPath(null);
           return;
       }
 
-      const audioSrc = Capacitor.convertFileSrc(trackPath);
+      // 确保使用正确的文件路径
+      let audioSrc = trackPath;
+      if (Capacitor.isNativePlatform()) {
+          audioSrc = Capacitor.convertFileSrc(trackPath);
+      }
+      
       audioRef.current.src = audioSrc;
+      audioRef.current.load(); // 确保加载音频
+      
       audioRef.current.play()
-        .then(() => setPlayingAudioPath(trackPath))
-        .catch(e => {
-            console.error("Error playing audio:", e);
-            setPlayingAudioPath(null);
-        });
+          .then(() => {
+              console.log("Audio playing:", trackPath);
+              setPlayingAudioPath(trackPath);
+          })
+          .catch(e => {
+              console.error("Error playing audio:", e);
+              // 如果播放失败，尝试其他格式
+              if (audioSrc !== trackPath) {
+                  audioRef.current!.src = trackPath;
+                  audioRef.current!.play()
+                      .then(() => setPlayingAudioPath(trackPath))
+                      .catch(err => {
+                          console.error("Fallback playback failed:", err);
+                          setPlayingAudioPath(null);
+                      });
+              } else {
+                  setPlayingAudioPath(null);
+              }
+          });
   };
 
   // --- SETTINGS HANDLERS ---
@@ -264,6 +307,11 @@ export default function App() {
     const newIndex = Math.max(0, Math.min(MODES.length - 1, index));
     setSelectedModeIndex(newIndex);
     
+    // 如果是自定义模式，重置自定义时长到该模式的默认值
+    if (MODES[newIndex].id === 'custom') {
+        setCustomDuration(MODES[newIndex].durationMinutes);
+    }
+    
     // Smooth scroll to center the selected item
     const container = scrollContainerRef.current;
     if (container) {
@@ -285,23 +333,33 @@ export default function App() {
     const durationSec = durationMin * 60;
     
     setTimeLeft(durationSec);
-    const end = new Date(new Date().getTime() + durationSec * 1000);
+    const now = new Date();
+    const end = new Date(now.getTime() + durationSec * 1000);
+    setStartTime(now);
     setEndTime(end);
     
     if (!sessionStats) {
         setSessionStats({
-            startTime: new Date(),
+            startTime: now,
             endTime: end,
             durationSeconds: durationSec
         });
     } else {
-         setSessionStats(prev => prev ? { ...prev, endTime: end, durationSeconds: prev.durationSeconds + durationSec } : null);
+         setSessionStats(prev => prev ? { 
+           ...prev, 
+           endTime: end, 
+           durationSeconds: prev.durationSeconds + durationSec 
+         } : null);
     }
     
     setAppState(AppState.RUNNING);
   };
 
   const stopTimer = () => {
+    if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+    }
     if (timerRef.current) clearInterval(timerRef.current);
     if (stopIntervalRef.current) {
         clearInterval(stopIntervalRef.current);
@@ -311,12 +369,21 @@ export default function App() {
     setSlideY(0);
     setStopProgress(0);
     setSessionStats(null);
+    setStartTime(null);
+    setEndTime(null);
   };
 
   const finishTimer = () => {
+    if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+    }
     if (timerRef.current) clearInterval(timerRef.current);
     setAppState(AppState.ALARM);
-    playAudio(globalWakeUpMusic?.path);
+    // 确保音频正确播放
+    setTimeout(() => {
+      playAudio(globalWakeUpMusic?.path);
+    }, 100);
   };
 
   const completeSession = () => {
