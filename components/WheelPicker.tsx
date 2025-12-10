@@ -1,4 +1,4 @@
-[file name]: WheelPicker.tsx
+[file name]: components/WheelPicker.tsx
 [file content begin]
 import React, { useRef, useEffect, UIEvent, useState } from 'react';
 
