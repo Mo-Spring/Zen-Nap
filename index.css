@@ -37,3 +37,34 @@
 .animate-sound-wave {
   animation: sound-wave 1s ease-in-out infinite;
 }
+
+/* 添加到 index.css */
+@keyframes scale-in {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.scale-in {
+  animation: scale-in 0.3s ease-out;
+}
+
+@keyframes fade-out-up {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+}
+
+.fade-out-up {
+  animation: fade-out-up 0.5s ease-out forwards;
+}
