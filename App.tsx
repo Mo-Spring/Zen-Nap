@@ -5,6 +5,8 @@ import { WheelPicker } from './components/WheelPicker';
 import { IconMap, SettingsIcon } from './components/Icons';
 import { AppState, NapMode, SessionStats } from './types';
 import { Play, ChevronUp, Music, X, ChevronsUpDown, Upload } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
+import { Filesystem, Directory } from '@capacitor/filesystem';
 
 // --- DATA ---
 const MODES: NapMode[] = [
@@ -57,8 +59,16 @@ const MODES: NapMode[] = [
 
 interface MusicTrack {
   name: string;
-  url: string;
+  path: string; // Native file URI from Capacitor Filesystem
 }
+
+const fileToBase64 = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve((reader.result as string).split(',')[1]);
+    reader.onerror = (error) => reject(error);
+  });
 
 export default function App() {
   const [appState, setAppState] = useState<AppState>(AppState.IDLE);
@@ -76,6 +86,7 @@ export default function App() {
   const [modeGuideMusic, setModeGuideMusic] = useState<Record<string, MusicTrack>>({});
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
   const [activeUploadContext, setActiveUploadContext] = useState<{
       field: 'wakeUp' | 'refresh' | 'guide';
       modeId?: string;
@@ -106,7 +117,117 @@ export default function App() {
   // Determine effective duration based on mode
   const displayDuration = currentMode.id === 'custom' ? customDuration : currentMode.durationMinutes;
 
-  // --- HANDLERS ---
+  // --- EFFECTS ---
+
+  // Load settings from localStorage on startup
+  useEffect(() => {
+    const savedSettings = localStorage.getItem('zenNapSettings');
+    if (savedSettings) {
+        try {
+            const settings = JSON.parse(savedSettings);
+            if(settings.music) {
+                setGlobalWakeUpMusic(settings.music.wakeUp || null);
+                setGlobalRefreshMusic(settings.music.refresh || null);
+                setModeGuideMusic(settings.music.guides || {});
+            }
+        } catch (e) {
+            console.error("Failed to parse settings from localStorage", e);
+        }
+    }
+  }, []);
+
+  // Save music settings to localStorage whenever they change
+  useEffect(() => {
+    const settings = {
+        music: {
+            wakeUp: globalWakeUpMusic,
+            refresh: globalRefreshMusic,
+            guides: modeGuideMusic,
+        }
+    };
+    localStorage.setItem('zenNapSettings', JSON.stringify(settings));
+  }, [globalWakeUpMusic, globalRefreshMusic, modeGuideMusic]);
+
+  useEffect(() => {
+    if (appState === AppState.RUNNING && timeLeft > 0) {
+      timerRef.current = window.setInterval(() => {
+        setTimeLeft((prev) => {
+          if (prev <= 1) {
+            finishTimer();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (stopIntervalRef.current) clearInterval(stopIntervalRef.current);
+    };
+  }, [appState]);
+
+  // --- AUDIO HANDLERS ---
+  
+  const playAudio = (trackPath: string | undefined) => {
+      if (trackPath && audioRef.current) {
+          const audioSrc = Capacitor.convertFileSrc(trackPath);
+          audioRef.current.src = audioSrc;
+          audioRef.current.play().catch(e => console.error("Error playing audio:", e));
+      }
+  };
+
+  // --- SETTINGS HANDLERS ---
+  const handleUploadClick = (field: 'wakeUp' | 'refresh' | 'guide', modeId?: string) => {
+      setActiveUploadContext({ field, modeId });
+      if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+          fileInputRef.current.click();
+      }
+  };
+
+  const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file && activeUploadContext) {
+          try {
+              const base64Data = await fileToBase64(file);
+              const fileName = `${Date.now()}-${file.name}`;
+              
+              const result = await Filesystem.writeFile({
+                  path: fileName,
+                  data: base64Data,
+                  directory: Directory.Data,
+              });
+
+              const track: MusicTrack = { name: file.name, path: result.uri };
+
+              if (activeUploadContext.field === 'wakeUp') {
+                  setGlobalWakeUpMusic(track);
+              } else if (activeUploadContext.field === 'refresh') {
+                  setGlobalRefreshMusic(track);
+              } else if (activeUploadContext.field === 'guide' && activeUploadContext.modeId) {
+                  setModeGuideMusic(prev => ({
+                      ...prev,
+                      [activeUploadContext.modeId!]: track
+                  }));
+              }
+          } catch (error) {
+              console.error("Failed to save file:", error);
+          }
+      }
+      setActiveUploadContext(null);
+  };
+
+  const getMusicStatusText = (field: 'wakeUp' | 'refresh' | 'guide', modeId?: string) => {
+      let track: MusicTrack | null | undefined = null;
+      if (field === 'wakeUp') track = globalWakeUpMusic;
+      else if (field === 'refresh') track = globalRefreshMusic;
+      else if (field === 'guide' && modeId) track = modeGuideMusic[modeId];
+
+      if (track) return track.name;
+      return null;
+  };
+  
+  // --- TIMER HANDLERS ---
 
   const handleModeSelect = (index: number) => {
     if (appState !== AppState.IDLE) return;
@@ -165,6 +286,7 @@ export default function App() {
   const finishTimer = () => {
     if (timerRef.current) clearInterval(timerRef.current);
     setAppState(AppState.ALARM);
+    playAudio(globalWakeUpMusic?.path);
   };
 
   const completeSession = () => {
@@ -176,46 +298,7 @@ export default function App() {
       setSlideY(0);
   };
 
-  // --- MUSIC SETTINGS HANDLERS ---
-  const handleUploadClick = (field: 'wakeUp' | 'refresh' | 'guide', modeId?: string) => {
-      setActiveUploadContext({ field, modeId });
-      if (fileInputRef.current) {
-          fileInputRef.current.value = '';
-          fileInputRef.current.click();
-      }
-  };
-
-  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (file && activeUploadContext) {
-          const url = URL.createObjectURL(file);
-          const track = { name: file.name, url };
-
-          if (activeUploadContext.field === 'wakeUp') {
-              setGlobalWakeUpMusic(track);
-          } else if (activeUploadContext.field === 'refresh') {
-              setGlobalRefreshMusic(track);
-          } else if (activeUploadContext.field === 'guide' && activeUploadContext.modeId) {
-              setModeGuideMusic(prev => ({
-                  ...prev,
-                  [activeUploadContext.modeId!]: track
-              }));
-          }
-      }
-      setActiveUploadContext(null);
-  };
-
-  const getMusicStatusText = (field: 'wakeUp' | 'refresh' | 'guide', modeId?: string) => {
-      let track: MusicTrack | null | undefined = null;
-      if (field === 'wakeUp') track = globalWakeUpMusic;
-      else if (field === 'refresh') track = globalRefreshMusic;
-      else if (field === 'guide' && modeId) track = modeGuideMusic[modeId];
-
-      if (track) return track.name;
-      return null;
-  };
-
-  // --- LONG PRESS HANDLERS ---
+  // --- GESTURE HANDLERS ---
   const handleStopPressStart = () => {
     if (stopIntervalRef.current) return;
     const startTime = Date.now();
@@ -239,28 +322,7 @@ export default function App() {
     }
     setStopProgress(0);
   };
-
-  // --- EFFECTS ---
-
-  useEffect(() => {
-    if (appState === AppState.RUNNING && timeLeft > 0) {
-      timerRef.current = window.setInterval(() => {
-        setTimeLeft((prev) => {
-          if (prev <= 1) {
-            finishTimer();
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-      if (stopIntervalRef.current) clearInterval(stopIntervalRef.current);
-    };
-  }, [appState]);
   
-  // --- SWIPE GESTURE HANDLERS (TOUCH) ---
   const handleTouchStart = (e: React.TouchEvent) => {
     if (appState !== AppState.IDLE) return;
     touchStartX.current = e.targetTouches[0].clientX;
@@ -289,7 +351,6 @@ export default function App() {
     touchEndX.current = null;
   };
 
-  // --- SWIPE GESTURE HANDLERS (MOUSE) ---
   const handleMouseDown = (e: React.MouseEvent) => {
     if (appState !== AppState.IDLE) return;
     touchStartX.current = e.clientX;
@@ -324,14 +385,11 @@ export default function App() {
     }
   };
 
-
-  // Wake up time string
   const getWakeUpTimeString = () => {
     const target = endTime || new Date(new Date().getTime() + displayDuration * 60000);
     return target.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
   };
 
-  // Slide to stop logic - Touch
   const handleAlarmTouchMove = (e: React.TouchEvent) => {
     if (appState !== AppState.ALARM) return;
     const touch = e.touches[0];
@@ -353,7 +411,6 @@ export default function App() {
     }
   };
 
-  // Slide to stop logic - Mouse
   const handleAlarmMouseDown = (e: React.MouseEvent) => {
       if (appState !== AppState.ALARM) return;
       dragStartY.current = e.clientY;
@@ -382,7 +439,6 @@ export default function App() {
       }
   };
 
-
   // --- RENDER HELPERS ---
 
   const formatTime = (seconds: number) => {
@@ -406,6 +462,7 @@ export default function App() {
     >
       <Background color={currentMode.themeColor} image={currentMode.bgImage} />
 
+      <audio ref={audioRef} className="hidden" />
       <input 
           type="file" 
           ref={fileInputRef} 
@@ -627,11 +684,14 @@ export default function App() {
                     将在 {getWakeUpTimeString()} 唤醒你
                 </div>
 
-                <button className="flex items-center space-x-2 bg-white/10 hover:bg-white/20 backdrop-blur-md px-5 py-2.5 rounded-full text-white/90 transition-all border border-white/10 mb-12">
+                <button 
+                    onClick={() => playAudio(modeGuideMusic[currentMode.id]?.path)}
+                    className="flex items-center space-x-2 bg-white/10 hover:bg-white/20 backdrop-blur-md px-5 py-2.5 rounded-full text-white/90 transition-all border border-white/10 mb-12"
+                >
                     <Play className="w-3 h-3 fill-current" />
                     <span className="text-sm">
                         {getMusicStatusText('guide', currentMode.id) 
-                            ? `专属引导: ${getMusicStatusText('guide', currentMode.id)}` 
+                            ? <span className="max-w-[200px] truncate inline-block">专属引导: {getMusicStatusText('guide', currentMode.id)}</span>
                             : '特制引导音乐'
                         }
                     </span>
@@ -809,15 +869,18 @@ export default function App() {
                         </div>
                     </div>
 
-                    <div className="bg-[#3b3b47] rounded-xl p-4 flex items-center justify-between">
-                         <div className="flex flex-col">
+                    <button 
+                        onClick={() => playAudio(globalRefreshMusic?.path)}
+                        className="bg-[#3b3b47] rounded-xl p-4 flex items-center justify-between w-full hover:bg-[#4a4a58] transition-colors"
+                    >
+                         <div className="flex flex-col text-left">
                             <span className="text-gray-300 text-sm">来点提神醒脑白噪音</span>
                             {getMusicStatusText('refresh') && (
-                                <span className="text-xs text-white/50">{getMusicStatusText('refresh')}</span>
+                                <span className="text-xs text-white/50 max-w-[200px] truncate">{getMusicStatusText('refresh')}</span>
                             )}
                          </div>
                          <Play className="w-4 h-4 text-white fill-current" />
-                    </div>
+                    </button>
                 </div>
              </div>
 
