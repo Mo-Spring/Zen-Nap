@@ -15,7 +15,7 @@ const MODES: NapMode[] = [
   {
     id: 'custom',
     name: '自定义',
-    durationMinutes: 30, // 这只是一个默认值，实际使用时会被 customDuration 覆盖
+    durationMinutes: 30,
     themeColor: '#94a3b8',
     accentColor: 'bg-slate-400',
     iconType: 'custom',
