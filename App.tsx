@@ -319,6 +319,15 @@ export default function App() {
   };
   
   // --- TIMER HANDLERS ---
+  
+  // 核心改动 1: 处理滚轮选择，确保更新 customDuration
+  const handleWheelChange = (newMinutes: number) => {
+      // 仅在 IDLE 状态且当前模式为 'custom' 时更新 customDuration
+      if (appState === AppState.IDLE && currentMode.id === 'custom') {
+          setCustomDuration(newMinutes);
+      }
+  };
+
 
   const handleModeSelect = (index: number) => {
     if (appState !== AppState.IDLE || isAnimating) return;
@@ -326,7 +335,9 @@ export default function App() {
     setSelectedModeIndex(newIndex);
     
     if (MODES[newIndex].id === 'custom') {
-        setCustomDuration(MODES[newIndex].durationMinutes);
+        // 如果切换到自定义模式，保持当前 customDuration，而不是重置为 MODES[newIndex].durationMinutes
+        // setCustomDuration(MODES[newIndex].durationMinutes); // 移除此行或确保它使用已有的 customDuration
+        // 如果想让它在切换模式时保持自定义时间，则不需要动 customDuration
     }
     
     const container = scrollContainerRef.current;
@@ -422,16 +433,17 @@ export default function App() {
     if (stopIntervalRef.current || isAnimating) return;
     const startTime = Date.now();
     const DURATION = 3000; // 3 seconds
-
+    
+    // Start tracking stop progress
     stopIntervalRef.current = window.setInterval(() => {
         const elapsed = Date.now() - startTime;
         const progress = Math.min(elapsed / DURATION, 1);
         setStopProgress(progress);
-
-        if (progress >= 1) {
-            stopTimer();
+        
+        if (progress === 1) {
+            stopTimer(); // Complete stop
         }
-    }, 16);
+    }, 50);
   };
 
   const handleStopPressEnd = () => {
@@ -442,64 +454,83 @@ export default function App() {
     setStopProgress(0);
   };
   
+  // Handlers for mode selection drag gesture
   const handleTouchStart = (e: React.TouchEvent) => {
     if (appState !== AppState.IDLE || isAnimating) return;
-    touchStartX.current = e.targetTouches[0].clientX;
-    touchEndX.current = e.targetTouches[0].clientX;
+    touchStartX.current = e.touches[0].clientX;
+    isDragging.current = false;
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (appState !== AppState.IDLE || isAnimating || touchStartX.current === null) return;
-    touchEndX.current = e.targetTouches[0].clientX;
+    if (touchStartX.current === null || appState !== AppState.IDLE || isAnimating) return;
+    const deltaX = e.touches[0].clientX - touchStartX.current;
+    if (Math.abs(deltaX) > 10) { // Threshold for drag start
+      isDragging.current = true;
+    }
   };
 
-  const handleTouchEnd = () => {
-    if (appState !== AppState.IDLE || isAnimating || touchStartX.current === null || touchEndX.current === null) return;
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current === null || appState !== AppState.IDLE || isAnimating) return;
     
-    const diff = touchStartX.current - touchEndX.current;
-    const SWIPE_THRESHOLD = 50;
-
-    if (Math.abs(diff) > SWIPE_THRESHOLD) {
-      if (diff > 0) { // Swiped left
-        handleModeSelect(selectedModeIndex + 1);
-      } else { // Swiped right
-        handleModeSelect(selectedModeIndex - 1);
+    // Check if it was a significant drag
+    if (isDragging.current) {
+      const deltaX = e.changedTouches[0].clientX - touchStartX.current;
+      if (Math.abs(deltaX) > 50) { // Swipe threshold
+        if (deltaX < 0) {
+          // Swiped left
+          handleModeSelect(selectedModeIndex + 1);
+        } else {
+          // Swiped right
+          handleModeSelect(selectedModeIndex - 1);
+        }
       }
     }
     touchStartX.current = null;
     touchEndX.current = null;
+    isDragging.current = false;
   };
-
+  
   const handleMouseDown = (e: React.MouseEvent) => {
     if (appState !== AppState.IDLE || isAnimating) return;
     touchStartX.current = e.clientX;
-    isDragging.current = true;
+    isDragging.current = false;
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
   };
 
-  const handleMouseUp = (e: React.MouseEvent) => {
-    if (appState !== AppState.IDLE || isAnimating || !isDragging.current || touchStartX.current === null) {
-      isDragging.current = false;
-      return;
+  const handleMouseMove = (e: MouseEvent) => {
+    if (touchStartX.current === null || appState !== AppState.IDLE || isAnimating) return;
+    const deltaX = e.clientX - touchStartX.current;
+    if (Math.abs(deltaX) > 10) {
+      isDragging.current = true;
     }
-    isDragging.current = false;
-    touchEndX.current = e.clientX;
-    
-    const diff = touchStartX.current - touchEndX.current;
-    const SWIPE_THRESHOLD = 50;
+  };
 
-    if (Math.abs(diff) > SWIPE_THRESHOLD) {
-      if (diff > 0) { // Swiped left
-        handleModeSelect(selectedModeIndex + 1);
-      } else { // Swiped right
-        handleModeSelect(selectedModeIndex - 1);
+  const handleMouseUp = (e: MouseEvent | React.MouseEvent) => {
+    if (touchStartX.current === null || appState !== AppState.IDLE || isAnimating) return;
+    
+    if (isDragging.current) {
+      const deltaX = e.clientX - touchStartX.current;
+      if (Math.abs(deltaX) > 50) {
+        if (deltaX < 0) {
+          // Swiped left
+          handleModeSelect(selectedModeIndex + 1);
+        } else {
+          // Swiped right
+          handleModeSelect(selectedModeIndex - 1);
+        }
       }
     }
     touchStartX.current = null;
     touchEndX.current = null;
+    isDragging.current = false;
+    document.removeEventListener('mousemove', handleMouseMove);
+    document.removeEventListener('mouseup', handleMouseUp);
   };
   
   const handleMouseLeave = (e: React.MouseEvent) => {
     if (isDragging.current) {
+      // @ts-ignore
       handleMouseUp(e);
     }
   };
@@ -515,453 +546,408 @@ export default function App() {
     const touch = e.touches[0];
     const screenH = window.innerHeight;
     const y = touch.clientY;
-    
     const delta = screenH - y;
-    
     if (delta > 200) {
-        completeSession();
+      completeSession();
     }
-    
     setSlideY(Math.min(delta, 250));
   };
 
   const handleAlarmTouchEnd = () => {
     if (appState === AppState.ALARM && slideY < 200) {
-        setSlideY(0);
+      setSlideY(0);
     }
   };
 
   const handleAlarmMouseDown = (e: React.MouseEvent) => {
-      if (appState !== AppState.ALARM) return;
-      dragStartY.current = e.clientY;
+    if (appState !== AppState.ALARM) return;
+    dragStartY.current = e.clientY;
+    document.addEventListener('mousemove', handleAlarmMouseMove);
+    document.addEventListener('mouseup', handleAlarmMouseUp);
   };
 
-  const handleAlarmMouseMove = (e: React.MouseEvent) => {
-      if (appState !== AppState.ALARM || dragStartY.current === null) return;
-      
-      const screenH = window.innerHeight;
-      const y = e.clientY;
-      
-      const delta = screenH - y;
-      
-      if (delta > 200) {
-          completeSession();
-          dragStartY.current = null;
-      }
-      setSlideY(Math.min(delta, 250));
+  const handleAlarmMouseMove = (e: MouseEvent) => {
+    if (appState !== AppState.ALARM || dragStartY.current === null) return;
+    const screenH = window.innerHeight;
+    const y = e.clientY;
+    const delta = screenH - y;
+    if (delta > 200) {
+      completeSession();
+      dragStartY.current = null;
+      document.removeEventListener('mousemove', handleAlarmMouseMove);
+      document.removeEventListener('mouseup', handleAlarmMouseUp);
+    }
+    setSlideY(Math.min(delta, 250));
   };
 
   const handleAlarmMouseUp = () => {
-      if (appState !== AppState.ALARM) return;
-      dragStartY.current = null;
-      if (slideY < 200) {
-          setSlideY(0);
-      }
+    if (appState !== AppState.ALARM) return;
+    dragStartY.current = null;
+    if (slideY < 200) {
+      setSlideY(0);
+    }
+    document.removeEventListener('mousemove', handleAlarmMouseMove);
+    document.removeEventListener('mouseup', handleAlarmMouseUp);
   };
-
+  
   // 获取唤醒时间字符串
   const getWakeUpTimeString = () => {
-    const target = endTime || new Date(new Date().getTime() + displayDuration * 60000);
-    return target.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
+    const target = endTime || new Date(Date.now() + displayDuration * 60000);
+    return target.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
   };
-
-  // 格式时间显示
-  const formatTime = (seconds: number) => {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return { m, s };
-  };
-
-  const { m, s } = formatTime(timeLeft);
-  const StartIcon = IconMap[currentMode.iconType];
-
-  // 动画计算
-  const idleTimerSize = currentMode.id === 'custom' ? 260 : 230;
-  const runningTimerSize = 250;
   
-  // iOS风格：中心放大，其他淡出
-  const timerScale = 1 + (animationProgress * 0.2);
+  // 渲染计时器
+  const { m, s } = useMemo(() => {
+    const min = Math.floor(timeLeft / 60);
+    const sec = timeLeft % 60;
+    return { m: min, s: sec };
+  }, [timeLeft]);
+  
+  const runningTimerSize = window.innerWidth * 0.7; // 屏幕宽度的 70%
+
+  // UI 透明度（用于启动动画）
   const uiOpacity = 1 - animationProgress;
-  const blurAmount = animationProgress * 10;
 
   return (
     <div 
-      className="relative w-full h-full overflow-hidden font-light"
-      onTouchMove={handleAlarmTouchMove} 
-      onTouchEnd={handleAlarmTouchEnd}
-      onMouseDown={handleAlarmMouseDown}
-      onMouseMove={handleAlarmMouseMove}
-      onMouseUp={handleAlarmMouseUp}
+      className="relative h-screen w-screen overflow-hidden text-white"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onMouseDown={handleMouseDown}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseLeave}
     >
       <Background color={currentMode.themeColor} image={currentMode.bgImage} />
       
-      {/* 背景模糊层 */}
-      <div 
-        className="absolute inset-0 z-5 transition-all duration-300"
-        style={{ 
-          backdropFilter: `blur(${blurAmount}px)`,
-          WebkitBackdropFilter: `blur(${blurAmount}px)`,
-        }}
-      />
-
-      <audio 
-        ref={audioRef} 
-        className="hidden" 
-        onEnded={() => setPlayingAudioPath(null)}
-        onPause={() => setPlayingAudioPath(null)}
-      />
+      {/* 文件上传 input (隐藏) */}
       <input 
-          type="file" 
           ref={fileInputRef} 
-          className="hidden" 
+          type="file" 
           accept="audio/*" 
-          onChange={onFileChange}
+          onChange={onFileChange} 
+          style={{ display: 'none' }} 
       />
+      {/* 音频播放器 (隐藏) */}
+      <audio ref={audioRef} />
 
+      {/* Settings Modal */}
       {isSettingsOpen && (
-        <div className="fixed inset-0 z-50 bg-[#0B0D14] flex flex-col animate-fade-in">
-            <div className="flex items-center justify-between px-6 py-5 border-b border-white/5 bg-[#0B0D14] shrink-0 z-20">
-                <div className="text-xl font-semibold tracking-wide text-white">设置</div>
-                <button onClick={() => setIsSettingsOpen(false)} className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors">
-                    <X className="w-5 h-5 text-white/70" />
-                </button>
+        <div className="fixed inset-0 z-50 bg-[#0B0D14]/90 backdrop-blur-md flex flex-col animate-fade-in">
+          <div className="flex items-center justify-between px-6 py-5 border-b border-white/5 bg-[#0B0D14] shrink-0 z-20">
+            <div className="text-xl font-semibold tracking-wide text-white">设置</div>
+            <button onClick={() => setIsSettingsOpen(false)} className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors">
+              <X className="w-5 h-5 text-white/70" />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-6 pb-12 no-scrollbar">
+            <div className="mb-2">
+              <div className="text-xs text-white/40 font-bold mb-3 uppercase tracking-wider pl-1">通用设置</div>
+              <div className="bg-[#161821] rounded-xl mb-4 overflow-hidden border border-white/5">
+                <div className="p-4 flex items-center justify-between">
+                  <div>
+                    <div className="text-base font-medium text-white/90">再睡一会</div>
+                    <div className="text-xs text-white/40 mt-1">闹钟响铃后的贪睡时长</div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="bg-[#242630] rounded-lg px-2 py-1 min-w-[3.5rem] text-center border border-white/10">
+                      <input 
+                        type="number" 
+                        value={snoozeDuration} 
+                        onChange={(e) => setSnoozeDuration(Math.max(1, Number(e.target.value)))} 
+                        className="bg-transparent text-white text-center w-full focus:outline-none" 
+                      />
+                    </div>
+                    <span className="text-sm text-white/60">分钟</span>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-[#161821] rounded-xl mb-4 overflow-hidden border border-white/5">
+                <div className="p-4 flex items-center justify-between">
+                  <div>
+                    <div className="text-base font-medium text-white/90">无痛唤醒</div>
+                    <div className="text-xs text-white/40 mt-1">在结束前淡入唤醒音乐</div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="bg-[#242630] rounded-lg px-2 py-1 min-w-[3.5rem] text-center border border-white/10">
+                      <input 
+                        type="number" 
+                        value={painlessWakeUpDuration} 
+                        onChange={(e) => setPainlessWakeUpDuration(Math.max(1, Number(e.target.value)))} 
+                        className="bg-transparent text-white text-center w-full focus:outline-none" 
+                      />
+                    </div>
+                    <span className="text-sm text-white/60">分钟</span>
+                  </div>
+                </div>
+              </div>
             </div>
             
-            <div className="flex-1 overflow-y-auto p-6 pb-12 no-scrollbar">
-                
-                <div className="mb-2">
-                    <div className="text-xs text-white/40 font-bold mb-3 uppercase tracking-wider pl-1">通用设置</div>
-                    
-                    <div className="bg-[#161821] rounded-xl mb-4 overflow-hidden border border-white/5">
-                        <div className="p-4 flex items-center justify-between">
-                            <div>
-                                <div className="text-base font-medium text-white/90">再睡一会</div>
-                                <div className="text-xs text-white/40 mt-1">闹钟响铃后的贪睡时长</div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <div className="bg-[#242630] rounded-lg px-2 py-1 min-w-[3.5rem] text-center border border-white/10">
-                                    <input 
-                                        type="number" 
-                                        value={snoozeDuration}
-                                        onChange={(e) => setSnoozeDuration(Math.max(1, Number(e.target.value)))}
-                                        className="bg-transparent text-white text-center w-full focus:outline-none"
-                                    />
-                                </div>
-                                <span className="text-sm text-white/60">分钟</span>
-                            </div>
-                        </div>
+            <div className="mb-2">
+              <div className="text-xs text-white/40 font-bold mb-3 uppercase tracking-wider pl-1">音乐轨道</div>
+              <div className="bg-[#161821] rounded-xl mb-4 overflow-hidden border border-white/5">
+                <div className="p-4 flex items-center justify-between">
+                  <div>
+                    <div className="text-base font-medium text-white/90">唤醒音乐</div>
+                    <div className="text-xs text-white/40 mt-1 max-w-[150px] truncate">
+                      {getMusicStatusText('wakeUp') || '未选择'}
                     </div>
-
-                    <div className="bg-[#161821] rounded-xl mb-4 overflow-hidden border border-white/5">
-                        <div className="p-4 flex items-center justify-between">
-                            <div>
-                                <div className="text-base font-medium text-white/90">无痛唤醒</div>
-                                <div className="text-xs text-white/40 mt-1">提前播放唤醒音 (单位: 秒)</div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <div className="bg-[#242630] rounded-lg px-2 py-1 min-w-[3.5rem] text-center border border-white/10">
-                                    <input 
-                                        type="number" 
-                                        value={painlessWakeUpDuration}
-                                        onChange={(e) => setPainlessWakeUpDuration(Math.max(0, Number(e.target.value)))}
-                                        className="bg-transparent text-white text-center w-full focus:outline-none"
-                                    />
-                                </div>
-                                <span className="text-sm text-white/60">秒</span>
-                            </div>
-                        </div>
-                        
-                        <div className="border-t border-white/5 mx-4" />
-                        
-                        <div className="p-4 flex items-center justify-between">
-                            <div className="flex flex-col">
-                                <span className="text-base font-medium text-white/90">唤醒音频</span>
-                                {getMusicStatusText('wakeUp') && (
-                                    <span className="text-xs text-white/40 mt-1 max-w-[150px] truncate">{getMusicStatusText('wakeUp')}</span>
-                                )}
-                            </div>
-                            <button 
-                                onClick={() => handleUploadClick('wakeUp')}
-                                className="flex items-center gap-2 bg-[#242630] hover:bg-[#2d303a] transition-colors px-4 py-2 rounded-lg border border-white/10"
-                            >
-                                <Upload className="w-4 h-4 text-white/70" />
-                                <span className="text-xs font-medium text-white/70">选择文件</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className="bg-[#161821] rounded-xl mb-6 overflow-hidden border border-white/5">
-                            <div className="p-4 flex items-center justify-between">
-                            <div className="flex flex-col">
-                                <span className="text-base font-medium text-white/90">提神醒脑音频</span>
-                                <span className="text-xs text-white/40 mt-1">小憩结束总结页面播放</span>
-                                {getMusicStatusText('refresh') && (
-                                    <span className="text-xs text-white/60 mt-1 max-w-[150px] truncate">当前: {getMusicStatusText('refresh')}</span>
-                                )}
-                            </div>
-                            <button 
-                                onClick={() => handleUploadClick('refresh')}
-                                className="flex items-center gap-2 bg-[#242630] hover:bg-[#2d303a] transition-colors px-4 py-2 rounded-lg border border-white/10"
-                            >
-                                <Upload className="w-4 h-4 text-white/70" />
-                                <span className="text-xs font-medium text-white/70">选择文件</span>
-                            </button>
-                        </div>
-                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    {globalWakeUpMusic?.path && (
+                      <button 
+                        onClick={() => playAudio(globalWakeUpMusic.path)} 
+                        className={`p-3 rounded-lg border transition-all ${playingAudioPath === globalWakeUpMusic.path ? 'bg-white/30 border-white/50 text-white' : 'bg-white/10 border-white/20 text-white hover:bg-white/20'}`}
+                      >
+                         {playingAudioPath === globalWakeUpMusic.path ? <PlayingIcon /> : <Music className="w-4 h-4" />}
+                      </button>
+                    )}
+                    <button 
+                      onClick={() => handleUploadClick('wakeUp')} 
+                      className={`p-3 rounded-lg border transition-all ${globalWakeUpMusic ? 'bg-white/10 border-white/20 text-white' : 'bg-[#242630] border-white/10 text-white/50 hover:text-white'}`}
+                    >
+                      <Upload className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
+              </div>
 
-                <div className="mb-2">
-                    <div className="text-xs text-white/40 font-bold mb-3 uppercase tracking-wider pl-1">模式专属引导音乐</div>
-                    
-                    <div className="bg-[#161821] rounded-xl overflow-hidden border border-white/5">
-                        {MODES.map((mode, idx) => {
-                            const ModeIcon = IconMap[mode.iconType];
-                            const trackName = getMusicStatusText('guide', mode.id);
-                            
-                            return (
-                                <div key={mode.id}>
-                                    <div className="p-4 flex items-center justify-between hover:bg-white/5 transition-colors">
-                                        <div className="flex items-center gap-4">
-                                            <div className="p-2 rounded-lg bg-[#242630] text-white/70 border border-white/5">
-                                                <ModeIcon className="w-5 h-5" />
-                                            </div>
-                                            <div className="flex flex-col">
-                                                <span className="text-sm font-medium text-white/90">{mode.name.split(' ')[0]}</span>
-                                                {trackName && (
-                                                    <span className="text-xs text-white/40 max-w-[120px] truncate">{trackName}</span>
-                                                )}
-                                            </div>
-                                        </div>
-                                        <button 
-                                            onClick={() => handleUploadClick('guide', mode.id)}
-                                            className={`p-3 rounded-lg border transition-all ${trackName ? 'bg-white/10 border-white/20 text-white' : 'bg-[#242630] border-white/10 text-white/50 hover:text-white'}`}
-                                        >
-                                            <Upload className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                    {idx < MODES.length - 1 && <div className="border-t border-white/5 mx-4" />}
-                                </div>
-                            );
-                        })}
+              <div className="bg-[#161821] rounded-xl mb-4 overflow-hidden border border-white/5">
+                <div className="p-4 flex items-center justify-between">
+                  <div>
+                    <div className="text-base font-medium text-white/90">提神音乐</div>
+                    <div className="text-xs text-white/40 mt-1 max-w-[150px] truncate">
+                      {getMusicStatusText('refresh') || '未选择'}
                     </div>
+                  </div>
+                  <div className="flex gap-2">
+                    {globalRefreshMusic?.path && (
+                      <button 
+                        onClick={() => playAudio(globalRefreshMusic.path)} 
+                        className={`p-3 rounded-lg border transition-all ${playingAudioPath === globalRefreshMusic.path ? 'bg-white/30 border-white/50 text-white' : 'bg-white/10 border-white/20 text-white hover:bg-white/20'}`}
+                      >
+                         {playingAudioPath === globalRefreshMusic.path ? <PlayingIcon /> : <Music className="w-4 h-4" />}
+                      </button>
+                    )}
+                    <button 
+                      onClick={() => handleUploadClick('refresh')} 
+                      className={`p-3 rounded-lg border transition-all ${globalRefreshMusic ? 'bg-white/10 border-white/20 text-white' : 'bg-[#242630] border-white/10 text-white/50 hover:text-white'}`}
+                    >
+                      <Upload className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
+              </div>
             </div>
+
+            <div className="mb-2">
+              <div className="text-xs text-white/40 font-bold mb-3 uppercase tracking-wider pl-1">模式指导音</div>
+              <div className="bg-[#161821] rounded-xl overflow-hidden border border-white/5">
+                {MODES.filter(m => m.id !== 'custom').map((mode, idx) => {
+                  const trackName = getMusicStatusText('guide', mode.id);
+                  return (
+                    <div key={mode.id}>
+                      <div className="p-4 flex items-center justify-between">
+                        <div>
+                          <div className="text-base font-medium text-white/90">{mode.name}</div>
+                          <div className="text-xs text-white/40 mt-1 max-w-[150px] truncate">
+                            {trackName || '未选择'}
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          {modeGuideMusic[mode.id]?.path && (
+                            <button 
+                              onClick={() => playAudio(modeGuideMusic[mode.id].path)} 
+                              className={`p-3 rounded-lg border transition-all ${playingAudioPath === modeGuideMusic[mode.id].path ? 'bg-white/30 border-white/50 text-white' : 'bg-white/10 border-white/20 text-white hover:bg-white/20'}`}
+                            >
+                               {playingAudioPath === modeGuideMusic[mode.id].path ? <PlayingIcon /> : <Music className="w-4 h-4" />}
+                            </button>
+                          )}
+                          <button 
+                            onClick={() => handleUploadClick('guide', mode.id)} 
+                            className={`p-3 rounded-lg border transition-all ${trackName ? 'bg-white/10 border-white/20 text-white' : 'bg-[#242630] border-white/10 text-white/50 hover:text-white'}`}
+                          >
+                            <Upload className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                      {idx < MODES.length - 1 && <div className="border-t border-white/5 mx-4" />}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
       {appState === AppState.IDLE && (
         <div className="flex flex-col h-full relative z-10">
-            {/* 顶部栏 */}
-            <div 
-              className="pt-12 px-6 flex justify-between items-center text-white/80 relative z-40 transition-all duration-500"
-              style={{ opacity: uiOpacity }}
+          {/* 顶部栏 */}
+          <div 
+            className="pt-12 px-6 flex justify-between items-center text-white/80 relative z-40 transition-all duration-500" 
+            style={{ opacity: uiOpacity }}
+          >
+            <div className="w-6 h-6" />
+            <div className="text-lg tracking-wide font-medium">小憩</div>
+            <button 
+              onClick={() => setIsSettingsOpen(true)} 
+              className="p-1 rounded-full active:bg-white/10 transition-colors"
+              disabled={isAnimating}
             >
-                <div className="w-6 h-6" />
-                <div className="text-lg tracking-wide font-medium">小憩</div>
+              <SettingsIcon />
+            </button>
+          </div>
+
+          {/* 模式选择 */}
+          <div 
+            className="relative z-30 transition-all duration-500" 
+            style={{ opacity: uiOpacity }}
+          >
+            <div 
+              ref={scrollContainerRef} 
+              className="mt-8 flex overflow-x-auto space-x-2 px-4 pb-4 no-scrollbar" 
+              style={{ maskImage: 'linear-gradient(to right, transparent, black 5%, black 95%, transparent)' }}
+            >
+              {MODES.map((mode, idx) => (
                 <button 
-                    onClick={() => setIsSettingsOpen(true)}
-                    className="p-1 rounded-full active:bg-white/10 transition-colors"
-                    disabled={isAnimating}
+                  key={mode.id} 
+                  onClick={() => handleModeSelect(idx)} 
+                  className={` whitespace-nowrap px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 ${
+                    idx === selectedModeIndex ? 'bg-white/20 text-white backdrop-blur-md border border-white/30' : 'text-white/50 hover:text-white/80'
+                  } `}
+                  disabled={isAnimating}
                 >
-                    <SettingsIcon />
+                  {mode.name}
                 </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 核心显示/滚轮区 */}
+          <div 
+            className="flex-1 flex flex-col items-center justify-center pt-8 relative z-20"
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onMouseDown={handleMouseDown}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseLeave}
+          >
+            {/* 模式图标 */}
+            <div 
+              className={`p-4 rounded-full ${currentMode.accentColor} mb-6 transition-all duration-500`}
+              style={{ opacity: uiOpacity, transform: `scale(${1 - animationProgress * 0.2})` }}
+            >
+              {React.createElement(IconMap[currentMode.iconType], { className: 'w-8 h-8 text-white fill-current', strokeWidth: 0 })}
+            </div>
+            
+            <div className="relative flex items-center justify-center w-full">
+                {/* 核心改动 2: 使用 WheelPicker 替换静态显示，并绑定 handleWheelChange */}
+                {currentMode.id === 'custom' ? (
+                    <div 
+                        className="flex-1 flex items-center justify-center relative z-20"
+                        style={{ height: '320px', opacity: uiOpacity }}
+                    >
+                        <WheelPicker 
+                            value={customDuration} // 使用 customDuration 作为当前值
+                            min={1} 
+                            max={60} 
+                            onChange={handleWheelChange} // 绑定新的 handler
+                        />
+                        <div className="absolute right-[20%] top-1/2 -translate-y-1/2 text-5xl font-extralight text-white/50 pointer-events-none">
+                            分钟
+                        </div>
+                    </div>
+                ) : (
+                    <div 
+                        className="text-9xl font-extralight tabular-nums tracking-tighter text-white leading-none transition-opacity duration-300"
+                        style={{ opacity: uiOpacity }}
+                    >
+                        {displayDuration.toString().padStart(2, '0')}
+                    </div>
+                )}
             </div>
 
-            {/* 模式选择 */}
+            {/* 唤醒时间 */}
             <div 
-              className="relative z-30 transition-all duration-500"
+              className="mt-6 text-white/50 text-sm transition-all duration-500"
               style={{ opacity: uiOpacity }}
             >
-                <div 
-                    ref={scrollContainerRef}
-                    className="mt-8 flex overflow-x-auto space-x-2 px-4 pb-4 no-scrollbar"
-                    style={{ maskImage: 'linear-gradient(to right, transparent, black 5%, black 95%, transparent)' }}
-                >
-                    {MODES.map((mode, idx) => (
-                        <button
-                            key={mode.id}
-                            onClick={() => handleModeSelect(idx)}
-                            className={`
-                                whitespace-nowrap px-4 py-2 rounded-full text-sm font-medium transition-all duration-300
-                                ${idx === selectedModeIndex ? 'bg-white/20 text-white backdrop-blur-md border border-white/30' : 'text-white/50 hover:text-white/80'}
-                            `}
-                            disabled={isAnimating}
-                        >
-                            {mode.name}
-                        </button>
-                    ))}
-                </div>
+              预计 {getWakeUpTimeString()} 唤醒
             </div>
 
-            {/* 主内容区域 */}
-            <div 
-              className="flex-1 flex flex-col items-center justify-center"
-              onTouchStart={handleTouchStart}
-              onTouchMove={handleTouchMove}
-              onTouchEnd={handleTouchEnd}
-              onMouseDown={handleMouseDown}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={handleMouseLeave}
+          </div>
+
+          {/* 底部启动按钮 */}
+          <div 
+            className="pb-12 pt-6 flex flex-col items-center relative z-20 transition-all duration-500"
+            style={{ 
+              opacity: uiOpacity,
+              transform: `translateY(${animationProgress * 50}px)`
+            }}
+          >
+            <button 
+              onClick={startTimer} 
+              className="w-20 h-20 bg-white rounded-full flex items-center justify-center transition-all duration-300 active:scale-95 group relative hover:scale-105"
+              style={{ boxShadow: `0 0 40px ${currentMode.themeColor}50`, opacity: uiOpacity, transform: `scale(${isAnimating ? 0.9 : 1})` }}
+              disabled={isAnimating}
             >
-                <div className="relative flex items-center justify-center min-h-[260px]">
-                    {currentMode.id !== 'custom' && (
-                        <div 
-                          className="transition-all duration-500 ease-out"
-                          style={{ transform: `scale(${timerScale})` }}
-                        >
-                          <CircularTimer progress={0} size={idleTimerSize} showTicks={true} color="transparent" />
-                        </div>
-                    )}
-                    
-                    <div className={`${currentMode.id === 'custom' ? 'relative' : 'absolute inset-0'} flex flex-col items-center justify-center`}>
-                        {currentMode.id === 'custom' ? (
-                            <div 
-                              className="transition-all duration-500 ease-out"
-                              style={{ transform: `scale(${timerScale})` }}
-                            >
-                              <WheelPicker 
-                                  value={customDuration}
-                                  min={1}
-                                  max={180}
-                                  onChange={setCustomDuration}
-                              />
-                            </div>
-                        ) : (
-                            <div 
-                              className="flex flex-col items-center justify-center select-none transition-all duration-500 ease-out"
-                              style={{ transform: `scale(${timerScale})` }}
-                            >
-                                <div className="text-[72px] leading-none font-thin text-white tracking-tighter tabular-nums drop-shadow-lg">
-                                    {displayDuration}
-                                </div>
-                                <div className="text-lg text-white/90 font-light tracking-widest mt-2">
-                                    分钟
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                {/* 底部控制区域 */}
-                <div 
-                  className="pb-16 flex flex-col items-center justify-center w-full relative z-20 transition-all duration-500"
-                  style={{ opacity: uiOpacity }}
-                >
-                    
-                    <div className="text-white/70 text-sm font-light mb-8">
-                        将在 {getWakeUpTimeString()} 唤醒你
-                    </div>
-
-                    <button 
-                        onClick={() => playAudio(modeGuideMusic[currentMode.id]?.path)}
-                        className="flex items-center space-x-2 bg-white/10 hover:bg-white/20 backdrop-blur-md px-5 py-2.5 rounded-full text-white/90 transition-all border border-white/10 mb-12 h-10"
-                        disabled={isAnimating}
-                    >
-                        {playingAudioPath && playingAudioPath === modeGuideMusic[currentMode.id]?.path ? (
-                            <PlayingIcon />
-                        ) : (
-                            <Play className="w-3 h-3 fill-current" />
-                        )}
-                        <span className="text-sm">
-                            {getMusicStatusText('guide', currentMode.id) 
-                                ? `专属引导: ${getMusicStatusText('guide', currentMode.id)}`
-                                : '特制引导音乐'
-                            }
-                        </span>
-                    </button>
-
-                    <div className="flex items-center justify-center w-full">
-                        <button 
-                            onClick={startTimer}
-                            className="w-20 h-20 bg-white rounded-full flex items-center justify-center transition-all duration-300 active:scale-95 group relative hover:scale-105"
-                            style={{ 
-                              boxShadow: `0 0 40px ${currentMode.themeColor}50`,
-                              opacity: uiOpacity,
-                              transform: `scale(${isAnimating ? 0.9 : 1})`
-                            }}
-                            disabled={isAnimating}
-                        >
-                            <StartIcon 
-                                className="w-8 h-8 transition-colors duration-300"
-                                style={{ color: currentMode.themeColor }}
-                                fill="currentColor" 
-                                strokeWidth={0} 
-                            />
-                        </button>
-                    </div>
-                    
-                    <div className="mt-6 text-white/50 text-xs">开始小憩</div>
-                </div>
-            </div>
+              <Play className="w-8 h-8 transition-colors duration-300" style={{ color: currentMode.themeColor }} fill="currentColor" strokeWidth={0} />
+            </button>
+            <div className="mt-6 text-white/50 text-xs">开始小憩</div>
+          </div>
         </div>
       )}
 
+      {/* RUNNING State */}
       {appState === AppState.RUNNING && (
         <div className="absolute inset-0 z-20 flex flex-col h-full animate-fade-in bg-black/20">
-            <div className="pt-12 px-6 flex justify-center items-center text-white/80">
-                <div className="text-lg font-light tracking-wide opacity-80">{currentMode.name.split(' ')[0]}</div>
-            </div>
-
-            <div className="flex-1 flex flex-col items-center justify-center">
-                <div className="relative flex items-center justify-center">
-                    <CircularTimer progress={1 - (timeLeft / (displayDuration * 60))} size={runningTimerSize} color="white" />
-                    
-                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <div className="text-7xl font-thin tabular-nums tracking-tighter text-white leading-none">
-                            {m.toString().padStart(2, '0')}:{s.toString().padStart(2, '0')}
-                        </div>
-                    </div>
+          <div className="pt-12 px-6 flex justify-center items-center text-white/80">
+            <div className="text-lg font-light tracking-wide opacity-80">{currentMode.name.split(' ')[0]}</div>
+          </div>
+          <div className="flex-1 flex flex-col items-center justify-center">
+            <div className="relative flex items-center justify-center">
+              <CircularTimer 
+                progress={1 - (timeLeft / (displayDuration * 60))} 
+                size={runningTimerSize} 
+                color="white" 
+              />
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <div className="text-7xl font-thin tabular-nums tracking-tighter text-white leading-none">
+                  {m.toString().padStart(2, '0')}:{s.toString().padStart(2, '0')}
                 </div>
-
-                <div className="text-white/60 text-sm mt-8 font-light tracking-wide">
-                    将在 {endTime?.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })} 唤醒你
-                </div>
+              </div>
             </div>
-
-            <div className="pb-24 w-full flex flex-col items-center justify-center">
-                <div className="relative flex items-center justify-center">
-                    <svg className="absolute w-[88px] h-[88px] pointer-events-none transform -rotate-90">
-                        <circle 
-                            r="42" 
-                            cx="44" 
-                            cy="44" 
-                            fill="transparent" 
-                            stroke="rgba(255,255,255,0.1)" 
-                            strokeWidth="2" 
-                        />
-                        <circle 
-                            r="42" 
-                            cx="44" 
-                            cy="44" 
-                            fill="transparent" 
-                            stroke="white" 
-                            strokeWidth="3" 
-                            strokeDasharray={2 * Math.PI * 42}
-                            strokeDashoffset={2 * Math.PI * 42 * (1 - stopProgress)}
-                            strokeLinecap="round"
-                            className="transition-all duration-75 ease-linear"
-                        />
-                    </svg>
-
-                    <button 
-                        onMouseDown={handleStopPressStart}
-                        onMouseUp={handleStopPressEnd}
-                        onMouseLeave={handleStopPressEnd}
-                        onTouchStart={handleStopPressStart}
-                        onTouchEnd={handleStopPressEnd}
-                        className="w-16 h-16 rounded-full border border-white/30 flex items-center justify-center text-white/80 backdrop-blur-md active:bg-white/10 transition-colors z-10"
-                    >
-                        <div className="w-3 h-3 bg-white rounded-[1px]" />
-                    </button>
-                </div>
-                <div className="mt-4 text-white/40 text-xs tracking-wider">长按停止</div>
+            <div className="mt-8 text-white/50 text-sm">
+              预计 {getWakeUpTimeString()} 唤醒
             </div>
+          </div>
+
+          <div className="pb-12 pt-6 flex flex-col items-center relative z-20">
+            <button 
+                onMouseDown={handleStopPressStart} 
+                onMouseUp={handleStopPressEnd} 
+                onTouchStart={handleStopPressStart}
+                onTouchEnd={handleStopPressEnd}
+                className="w-20 h-20 bg-white/10 rounded-full flex items-center justify-center transition-all duration-300 active:scale-95 group relative overflow-hidden"
+            >
+                {/* 停止进度条 */}
+                <div 
+                    className="absolute inset-0 bg-white/50 transition-transform duration-50"
+                    style={{ transform: `scaleX(${stopProgress})`, transformOrigin: 'left' }}
+                />
+                <X className="w-6 h-6 text-white relative z-10" strokeWidth={2} />
+            </button>
+            <div className="mt-6 text-white/50 text-xs">{stopProgress > 0 ? `按住 ${((1 - stopProgress) * 3).toFixed(1)}s 取消` : '长按停止'}</div>
+          </div>
         </div>
       )}
 
+      {/* ALARM State */}
       {appState === AppState.ALARM && (
         <div 
-          className="absolute inset-0 z-30 flex flex-col items-center justify-between pb-16 pt-20 overflow-hidden"
+          className="absolute inset-0 z-20 flex flex-col h-full items-center justify-end bg-black/80 animate-fade-in"
           onTouchStart={handleAlarmTouchStart}
           onTouchMove={handleAlarmTouchMove}
           onTouchEnd={handleAlarmTouchEnd}
@@ -969,90 +955,76 @@ export default function App() {
           onMouseMove={handleAlarmMouseMove}
           onMouseUp={handleAlarmMouseUp}
         >
-            <div className="absolute inset-0 z-[-1]">
-                <img 
-                    src="https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?q=80&w=2940&auto=format&fit=crop" 
-                    className="w-full h-full object-cover opacity-60 scale-110"
-                    alt="Morning"
-                />
-                <div className="absolute inset-0 bg-black/60" />
-                <div className="absolute bottom-0 left-0 w-full h-40 bg-gradient-to-t from-black/80 to-transparent" />
+          <div className="absolute inset-0 z-0 flex flex-col items-center justify-center">
+            <div className="text-7xl font-thin tabular-nums tracking-tighter text-white leading-none mb-6 opacity-30 pointer-events-none" style={{ animationDelay: '0.5s', animationDuration: '3s' }}>
+                {getWakeUpTimeString()}
             </div>
+            <div 
+                className="text-8xl font-thin tabular-nums tracking-tighter text-white leading-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-30 pointer-events-none" 
+                style={{ animationDelay: '0.5s', animationDuration: '3s' }}
+            />
+          </div>
+          
+          <div 
+            className="w-full bg-[#161821] rounded-t-3xl shadow-2xl relative z-10 p-8 pt-12 transform transition-transform duration-100"
+            style={{ transform: `translateY(${slideY}px)` }}
+          >
+            <div className="text-xl font-semibold text-white mb-2">时间到了！</div>
+            <div className="text-sm text-white/60 mb-6">你完成了 {displayDuration} 分钟的午睡。</div>
+            
+            <div className="flex gap-4 mb-8 justify-center">
+              <button onClick={handleSnooze} className="flex-1 px-4 py-4 rounded-xl bg-[#242630] text-white/90 hover:bg-[#3b3b47] transition-colors">
+                再睡 {snoozeDuration} 分钟
+              </button>
+              <button onClick={completeSession} className="flex-1 px-4 py-4 rounded-xl bg-white text-black font-medium hover:bg-gray-200 transition-colors">
+                我醒了
+              </button>
+            </div>
+            
+            <div className="text-center text-xs text-white/40 pt-4">
+                向上滑动以停止闹钟
+            </div>
+            <ChevronUp className="w-6 h-6 text-white/60 mx-auto mt-2 animate-bounce-slow" />
 
-            <div className="text-center mt-10 relative z-10">
-                <div className="flex items-center justify-center mb-4">
-                    <Music className="w-6 h-6 text-white/80 mr-2" />
-                    <span className="text-white/80 text-lg">
-                        {getMusicStatusText('wakeUp') ? `正在播放: ${getMusicStatusText('wakeUp')}` : '小憩结束'}
-                    </span>
-                </div>
-                <div className="text-7xl font-light text-white mb-2">
-                    {new Date().toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit', hour12: false})}
-                </div>
-            </div>
-
-            <div className="relative w-64 h-64 flex items-center justify-center z-10">
-                <div className="absolute inset-0 border border-white/20 rounded-full animate-ping opacity-20 pointer-events-none" style={{ animationDuration: '3s' }} />
-                <div className="absolute inset-4 border border-white/20 rounded-full animate-ping opacity-30 pointer-events-none" style={{ animationDelay: '0.5s', animationDuration: '3s' }} />
-                
-                <div 
-                    onClick={handleSnooze}
-                    className="z-10 bg-white/10 hover:bg-white/20 backdrop-blur-lg w-48 h-48 rounded-full flex flex-col items-center justify-center text-center px-4 border border-white/10 cursor-pointer transition-all active:scale-95 active:bg-white/30"
-                >
-                    <div className="text-xl font-medium mb-1">再睡{snoozeDuration}分钟</div>
-                    <div className="text-xs text-white/60">「多倍劫」唤醒你</div>
-                </div>
-            </div>
-
-            <div className="flex flex-col items-center w-full relative h-32 justify-end z-10">
-                <div 
-                    className="flex flex-col items-center transition-transform duration-100 ease-out cursor-pointer pb-8"
-                    style={{ transform: `translateY(-${slideY}px)` }}
-                >
-                    <ChevronUp className="w-6 h-6 text-white/70 animate-bounce" />
-                    <div className="text-white/70 text-sm mt-2 font-medium tracking-wide">上滑停止唤醒</div>
-                </div>
-            </div>
+          </div>
         </div>
       )}
 
+      {/* SUMMARY State */}
       {appState === AppState.SUMMARY && sessionStats && (
-        <div className="absolute inset-0 z-40 bg-black/60 flex flex-col items-center justify-center p-6">
-            <div className="w-full max-w-sm bg-[#2a2a35] rounded-3xl p-6 shadow-2xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 opacity-20">
-                    <img src="https://picsum.photos/id/40/200/200" className="mask-image-gradient" alt="cat" />
+        <div className="absolute inset-0 z-20 flex flex-col h-full items-center justify-start bg-black/80 animate-fade-in">
+            <div className="pt-20 px-6 flex flex-col items-center text-white/80 w-full">
+                <div className="text-3xl font-bold tracking-wide mb-2">午休总结</div>
+                <div className="text-sm text-white/60 mb-10">一次完美的小憩</div>
+            </div>
+
+            <div className="flex flex-col items-center justify-center w-full px-6">
+                <div className="bg-[#161821] rounded-xl mb-6 p-6 w-full max-w-sm border border-white/5">
+                    <div className="text-xs text-white/40 font-bold mb-4 uppercase tracking-wider">会话详情</div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="flex flex-col">
+                            <span className="text-sm text-white/60">模式</span>
+                            <span className="text-xl font-semibold text-white">{currentMode.name.split(' ')[0]}</span>
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="text-sm text-white/60">时长</span>
+                            <span className="text-xl font-semibold text-white">{sessionStats.durationSeconds / 60} 分钟</span>
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="text-sm text-white/60">开始时间</span>
+                            <span className="text-xl font-semibold text-white">{sessionStats.startTime.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="text-sm text-white/60">结束时间</span>
+                            <span className="text-xl font-semibold text-white">{sessionStats.endTime.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                    </div>
                 </div>
-                
-                <div className="relative z-10">
-                    <div className="text-gray-400 text-sm mb-1">{currentMode.name}</div>
-                    <div className="text-gray-500 text-xs mb-6">
-                        {new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'long' })}
-                    </div>
 
-                    <div className="grid grid-cols-3 gap-4 mb-8">
-                        <div>
-                            <div className="text-gray-500 text-xs mb-1">就寝</div>
-                            <div className="text-white text-xl font-light">
-                                {sessionStats.startTime.toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit', hour12: false})}
-                            </div>
-                        </div>
-                        <div>
-                            <div className="text-gray-500 text-xs mb-1">起床</div>
-                            <div className="text-white text-xl font-light">
-                                {new Date().toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit', hour12: false})}
-                            </div>
-                        </div>
-                        <div>
-                            <div className="text-gray-500 text-xs mb-1">总时长</div>
-                            <div className="text-white text-xl font-light">
-                                {(sessionStats.durationSeconds / 60).toFixed(1)} <span className="text-xs">分</span>
-                            </div>
-                        </div>
-                    </div>
-
+                <div className="flex flex-col items-center w-full max-w-sm">
                     <button 
                         onClick={() => playAudio(globalRefreshMusic?.path)}
-                        className="bg-[#3b3b47] rounded-xl p-4 flex items-center justify-between w-full hover:bg-[#4a4a58] transition-colors"
+                        className="bg-[#3b3b47] rounded-xl p-4 flex items-center justify-between w-full hover:bg-[#4a4a58] transition-colors mb-4"
                     >
                         <div className="flex flex-col text-left">
                             <span className="text-gray-300 text-sm">来点提神醒脑白噪音</span>
@@ -1066,15 +1038,15 @@ export default function App() {
                             <Play className="w-4 h-4 text-white fill-current" />
                         )}
                     </button>
+                    
+                    <button onClick={() => {
+                        stopAllAudio();
+                        setAppState(AppState.IDLE);
+                    }} className="mt-4 p-4 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
+                        <X className="w-6 h-6 text-white" />
+                    </button>
                 </div>
             </div>
-
-            <button onClick={() => {
-                stopAllAudio();
-                setAppState(AppState.IDLE);
-            }} className="mt-8 p-4 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
-                <X className="w-6 h-6 text-white" />
-            </button>
         </div>
       )}
     </div>
