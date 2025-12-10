@@ -1,4 +1,4 @@
-// components/WheelPicker.tsx
+// src/components/WheelPicker.tsx
 import React, { useRef, useEffect, UIEvent, useState } from 'react';
 
 interface WheelPickerProps {
