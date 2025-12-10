@@ -20,7 +20,6 @@ const App: React.FC = () => {
   const [selectedModeIndex, setSelectedModeIndex] = useState<number>(2);
   const [customDuration, setCustomDuration] = useState<number>(30);
   const [isAnimating, setIsAnimating] = useState<boolean>(false);
-  const [animationProgress, setAnimationProgress] = useState<number>(0);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [painlessWakeUpDuration, setPainlessWakeUpDuration] = useState<number>(10);
   const [snoozeDuration, setSnoozeDuration] = useState<number>(5);
@@ -31,7 +30,6 @@ const App: React.FC = () => {
   const [timeLeft, setTimeLeft] = useState<number>(0);
   const [endTime, setEndTime] = useState<Date | null>(null);
   const [startTime, setStartTime] = useState<Date | null>(null);
-  const [sessionStats, setSessionStats] = useState<SessionStats | null>(null);
   const [activeUploadContext, setActiveUploadContext] = useState<{ field: string; modeId?: string } | null>(null);
   const [slideY, setSlideY] = useState<number>(0);
   const [stopProgress, setStopProgress] = useState<number>(0);
@@ -67,7 +65,7 @@ const App: React.FC = () => {
       try {
         const settings = JSON.parse(saved);
         if (settings.globalWakeUpMusic) {
-          setGlobalWakeUpMoney(settings.globalWakeUpMusic);
+          setGlobalWakeUpMusic(settings.globalWakeUpMusic);
         }
         if (settings.globalRefreshMusic) {
           setGlobalRefreshMusic(settings.globalRefreshMusic);
@@ -307,12 +305,11 @@ const App: React.FC = () => {
     setTimeLeft(0);
     setStartTime(null);
     setEndTime(null);
-    setSessionStats(null);
     setStopProgress(0);
   };
 
   const finishTimer = () => {
-    LocalNotifications.cancel({ notifications: [{ id: 1 }] }); // 🚨 实际上可能已触发，但安全起见
+    LocalNotifications.cancel({ notifications: [{ id: 1 }] }); // 🚨 安全取消
     setAppState(AppState.ALARM);
     playAudio(globalWakeUpMusic?.path);
   };
