@@ -1,6 +1,7 @@
-enum AppState { IDLE, RUNNING, ALARM, SUMMARY }
-interface NapMode { /* ... */ }
-interface SessionStats { /* ... */ }
+// types.ts
+export enum AppState { IDLE, RUNNING, ALARM, SUMMARY }
+export interface NapMode { /* ... */ }
+export interface SessionStats { /* ... */ }
 
 export enum AppState {
   IDLE = 'IDLE',
