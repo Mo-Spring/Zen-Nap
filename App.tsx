@@ -1,10 +1,11 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Background } from './components/Background';
 import { CircularTimer } from './components/CircularTimer';
 import { WheelPicker } from './components/WheelPicker';
 import { IconMap, SettingsIcon } from './components/Icons';
 import { AppState, NapMode, SessionStats } from './types';
-import { Play, ChevronUp, Music, X, Upload } from 'lucide-react';
+import { Play, ChevronUp, Music, X, ChevronsUpDown, Upload } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 
@@ -83,7 +84,6 @@ export default function App() {
   const [appState, setAppState] = useState<AppState>(AppState.IDLE);
   const [selectedModeIndex, setSelectedModeIndex] = useState(2); // Default to efficient 24'
   const [customDuration, setCustomDuration] = useState(30); // Independent state for custom mode
-  const [showWheelPicker, setShowWheelPicker] = useState(false);
   
   // Settings State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -281,12 +281,6 @@ export default function App() {
   };
 
   const startTimer = (durationOverride?: number) => {
-    // Stop any preview music when starting timer
-    if (audioRef.current) {
-        audioRef.current.pause();
-        setPlayingAudioPath(null);
-    }
-
     const durationMin = durationOverride !== undefined ? durationOverride : displayDuration;
     const durationSec = durationMin * 60;
     

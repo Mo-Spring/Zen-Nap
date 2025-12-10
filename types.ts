@@ -1,3 +1,6 @@
+
+import { LucideIcon } from 'lucide-react';
+
 export enum AppState {
   IDLE = 'IDLE',
   RUNNING = 'RUNNING',
