@@ -20,3 +20,10 @@ export interface SessionStats {
   endTime: Date;
   durationSeconds: number;
 }
+
+// 添加音乐轨道类型
+export interface MusicTrack {
+  name: string;
+  path: string;
+  uri?: string;
+}
