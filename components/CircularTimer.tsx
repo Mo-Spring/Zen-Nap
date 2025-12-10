@@ -1,15 +1,13 @@
 
 import React, { useMemo } from 'react';
 
-// components/CircularTimer.tsx
-export interface CircularTimerProps {
-  size: number;
-  minutes: number;
-  seconds: number;
-  progress: number;
-  color: string;
+interface CircularTimerProps {
+  progress: number; // 0 to 1
+  size?: number;
+  color?: string;
   showTicks?: boolean;
 }
+
 export const CircularTimer: React.FC<CircularTimerProps> = ({ 
   progress, 
   size = 300, 

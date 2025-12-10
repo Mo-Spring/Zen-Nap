@@ -1,4 +1,3 @@
-// src/components/WheelPicker.tsx
 import React, { useRef, useEffect, UIEvent, useState } from 'react';
 
 interface WheelPickerProps {
@@ -12,104 +11,140 @@ export const WheelPicker: React.FC<WheelPickerProps> = ({ value, min, max, onCha
   const containerRef = useRef<HTMLDivElement>(null);
   const isScrolling = useRef<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [scrollTop, setScrollTop] = useState(0);
+  const ITEM_HEIGHT = 64; 
 
-  const ITEM_HEIGHT = 64;
-  const VISIBLE_ITEMS = 5; // odd number
-  const PADDING_TOP = ((VISIBLE_ITEMS - 1) / 2) * ITEM_HEIGHT;
-
+  // Generate the range of numbers
   const range = Array.from({ length: max - min + 1 }, (_, i) => i + min);
 
-  // Sync scroll on value change
+  // Sync scroll position with value on initial mount
   useEffect(() => {
     if (containerRef.current && !isDragging) {
       const index = value - min;
       const targetScrollTop = index * ITEM_HEIGHT;
-      containerRef.current.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
+      if (Math.abs(containerRef.current.scrollTop - targetScrollTop) > 1) {
+        containerRef.current.scrollTop = targetScrollTop;
+        setScrollTop(targetScrollTop);
+      }
     }
-  }, [value, min, isDragging]);
+  }, [value, min, max, isDragging]);
 
   const handleScrollEnd = () => {
     if (!containerRef.current || isDragging) return;
+    
     const scrollTop = containerRef.current.scrollTop;
+    
+    // 修复：使用 Math.round 确保选择正确的项目，但要考虑惯性滚动
     const rawIndex = scrollTop / ITEM_HEIGHT;
     const index = Math.round(rawIndex);
     const newValue = Math.max(min, Math.min(max, min + index));
+
+    // 修复：只有在值改变时才更新和滚动
     if (newValue !== value) {
       const targetScrollTop = index * ITEM_HEIGHT;
-      containerRef.current.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
+      
+      // 平滑滚动到目标位置
+      containerRef.current.scrollTo({
+        top: targetScrollTop,
+        behavior: 'smooth',
+      });
+      
       onChange(newValue);
     }
+    
     setIsDragging(false);
   };
 
   const onScroll = (e: UIEvent<HTMLDivElement>) => {
     e.stopPropagation();
     if (!containerRef.current) return;
+    
+    const currentScrollTop = containerRef.current.scrollTop;
+    setScrollTop(currentScrollTop);
     setIsDragging(true);
-    if (isScrolling.current) clearTimeout(isScrolling.current);
-    isScrolling.current = window.setTimeout(handleScrollEnd, 150);
+    
+    if (isScrolling.current) {
+      clearTimeout(isScrolling.current);
+    }
+    
+    isScrolling.current = window.setTimeout(() => {
+      handleScrollEnd();
+    }, 150);
   };
 
-  const onTouchStart = () => setIsDragging(true);
-  const onTouchEnd = () => {
-    if (isScrolling.current) clearTimeout(isScrolling.current);
-    isScrolling.current = window.setTimeout(handleScrollEnd, 100);
+  const onTouchStart = () => {
+    setIsDragging(true);
   };
+
+  const onTouchEnd = () => {
+    if (isScrolling.current) {
+      clearTimeout(isScrolling.current);
+    }
+    isScrolling.current = window.setTimeout(() => {
+      handleScrollEnd();
+    }, 100);
+  };
+
   const stopPropagation = (e: React.SyntheticEvent) => e.stopPropagation();
 
+  // 计算中心位置（修正了之前的错误）
+  const centerPosition = scrollTop + ITEM_HEIGHT * 2; // 容器高度的一半
+
   return (
-    <div
-      className="relative h-[320px] w-[260px] flex items-center justify-center"
+    <div 
+      className="relative h-[256px] w-[260px] flex items-center justify-center"
       onTouchStart={stopPropagation}
       onTouchMove={stopPropagation}
       onMouseDown={stopPropagation}
     >
-      {/* Center Highlight */}
-      <div className="absolute top-1/2 left-0 right-0 h-[64px] -translate-y-1/2 border-y border-white/30 pointer-events-none z-20" />
-      <div className="absolute right-8 top-1/2 -translate-y-1/2 text-white/60 text-sm font-medium tracking-widest z-30 pointer-events-none">
-        分钟
+      
+      {/* Selection Lines / Scale Indicators */}
+      <div className="absolute top-1/2 left-4 right-4 h-[64px] -translate-y-1/2 border-y border-white/20 pointer-events-none z-20" />
+
+      {/* Fixed "Minutes" Label */}
+      <div className="absolute right-12 top-1/2 -translate-y-1/2 mt-1 z-30 pointer-events-none">
+          <span className="text-sm font-medium text-white/50 tracking-widest">分钟</span>
       </div>
 
-      {/* Scrollable List with Mask */}
-      <div
+      {/* Scrollable Container with Mask for Fade Effect */}
+      <div 
         ref={containerRef}
-        className="w-full overflow-y-scroll no-scrollbar"
-        style={{
-          paddingTop: `${PADDING_TOP}px`,
-          paddingBottom: `${PADDING_TOP}px`,
-          maskImage: 'linear-gradient(to bottom, transparent 0%, black 20%, black 80%, transparent 100%)',
-          WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 20%, black 80%, transparent 100%)',
-        }}
+        className="h-full w-full overflow-y-scroll no-scrollbar py-[96px]"
         onScroll={onScroll}
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
         onMouseDown={onTouchStart}
         onMouseUp={onTouchEnd}
+        style={{
+          maskImage: 'linear-gradient(to bottom, transparent 0%, black 25%, black 75%, transparent 100%)',
+          WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 25%, black 75%, transparent 100%)'
+        }}
       >
         {range.map((num) => {
           const itemTop = (num - min) * ITEM_HEIGHT;
-          const center = itemTop + ITEM_HEIGHT / 2;
-          const distanceFromCenter = Math.abs(containerRef.current?.scrollTop + PADDING_TOP - center) || 0;
-          const scale = Math.max(0.7, 1 - distanceFromCenter / (ITEM_HEIGHT * 2));
-          const opacity = Math.max(0.3, 1 - distanceFromCenter / (ITEM_HEIGHT * 2.5));
-          const isSelected = distanceFromCenter < ITEM_HEIGHT / 2;
-
+          const itemCenter = itemTop + ITEM_HEIGHT / 2;
+          const distance = Math.abs(centerPosition - itemCenter);
+          
+          // 更精确的计算，避免跳跃
+          const scale = 0.8 + 0.4 * Math.max(0, 1 - distance / (ITEM_HEIGHT * 1.5));
+          const opacity = 0.3 + 0.7 * Math.max(0, 1 - distance / (ITEM_HEIGHT * 1.5));
+          
+          const isSelected = distance < ITEM_HEIGHT / 3;
+          
           return (
-            <div
-              key={num}
+            <div 
+              key={num} 
               className="h-[64px] flex items-center justify-center select-none"
               style={{
                 transform: `scale(${scale})`,
-                opacity,
-                transition: isDragging ? 'none' : 'transform 150ms cubic-bezier(0.4,0,0.2,1), opacity 150ms cubic-bezier(0.4,0,0.2,1)',
+                opacity: opacity,
+                transition: isDragging ? 'none' : 'transform 150ms ease, opacity 150ms ease'
               }}
             >
-              <span
-                className={`font-medium tabular-nums leading-none ${
-                  isSelected ? 'text-[72px] text-white' : 'text-[56px] text-white/90'
-                }`}
-              >
-                {num}
+              <span className={`font-light tabular-nums leading-none tracking-tight text-white ${
+                  isSelected ? 'text-[72px]' : 'text-[60px]'
+              }`}>
+                  {num}
               </span>
             </div>
           );
