@@ -1,5 +1,3 @@
-[file name]: App.tsx
-[file content begin]
 import React, { useState, useEffect, useRef } from 'react';
 import { Background } from './components/Background';
 import { CircularTimer } from './components/CircularTimer';
@@ -135,8 +133,6 @@ export default function App() {
   const isDragging = useRef(false);
   
   const currentMode = MODES[selectedModeIndex];
-  
-  // 关键修复：动态计算显示时长，自定义模式使用 customDuration，其他模式使用预设值
   const displayDuration = currentMode.id === 'custom' ? customDuration : currentMode.durationMinutes;
 
   // --- EFFECTS ---
@@ -349,7 +345,7 @@ export default function App() {
   };
 
   const startTimerInternal = () => {
-    const durationMin = displayDuration; // 关键修复：使用正确的 displayDuration
+    const durationMin = displayDuration;
     const durationSec = durationMin * 60;
     
     setTimeLeft(durationSec);
@@ -1084,4 +1080,3 @@ export default function App() {
     </div>
   );
 }
-[file content end]
