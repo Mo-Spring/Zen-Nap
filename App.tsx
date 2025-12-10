@@ -91,12 +91,16 @@ export default function App() {
   // Gestures
   const [slideY, setSlideY] = useState(0);
   
-  // Custom Time Drag Gestures (kept for reference, though WheelPicker replaces it)
   const dragStartY = useRef<number | null>(null);
 
   // Long Press to Stop Logic
   const [stopProgress, setStopProgress] = useState(0);
   const stopIntervalRef = useRef<number | null>(null);
+  
+  // Swipe Gestures for mode change
+  const touchStartX = useRef<number | null>(null);
+  const touchEndX = useRef<number | null>(null);
+  const isDragging = useRef(false);
 
   const currentMode = MODES[selectedModeIndex];
   // Determine effective duration based on mode
@@ -106,13 +110,14 @@ export default function App() {
 
   const handleModeSelect = (index: number) => {
     if (appState !== AppState.IDLE) return;
-    setSelectedModeIndex(index);
+    const newIndex = Math.max(0, Math.min(MODES.length - 1, index));
+    setSelectedModeIndex(newIndex);
     
     // Smooth scroll to center the selected item
     const container = scrollContainerRef.current;
     if (container) {
         const buttons = container.querySelectorAll('button');
-        const button = buttons[index];
+        const button = buttons[newIndex];
         if (button) {
             const containerCenter = container.clientWidth / 2;
             const buttonCenter = button.offsetLeft + button.offsetWidth / 2;
@@ -132,7 +137,6 @@ export default function App() {
     const end = new Date(new Date().getTime() + durationSec * 1000);
     setEndTime(end);
     
-    // Only set stats start time if it's a fresh session, otherwise (snooze) we might want to keep original start
     if (!sessionStats) {
         setSessionStats({
             startTime: new Date(),
@@ -140,7 +144,6 @@ export default function App() {
             durationSeconds: durationSec
         });
     } else {
-        // Update stats end time
          setSessionStats(prev => prev ? { ...prev, endTime: end, durationSeconds: prev.durationSeconds + durationSec } : null);
     }
     
@@ -156,7 +159,7 @@ export default function App() {
     setAppState(AppState.IDLE);
     setSlideY(0);
     setStopProgress(0);
-    setSessionStats(null); // Reset stats on full stop
+    setSessionStats(null);
   };
 
   const finishTimer = () => {
@@ -169,16 +172,15 @@ export default function App() {
   };
 
   const handleSnooze = () => {
-      // Start a timer for the snooze duration
       startTimer(snoozeDuration);
-      setSlideY(0); // Reset slide
+      setSlideY(0);
   };
 
   // --- MUSIC SETTINGS HANDLERS ---
   const handleUploadClick = (field: 'wakeUp' | 'refresh' | 'guide', modeId?: string) => {
       setActiveUploadContext({ field, modeId });
       if (fileInputRef.current) {
-          fileInputRef.current.value = ''; // Reset to allow same file selection
+          fileInputRef.current.value = '';
           fileInputRef.current.click();
       }
   };
@@ -225,7 +227,7 @@ export default function App() {
         setStopProgress(progress);
 
         if (progress >= 1) {
-            stopTimer(); // This will clear the interval inside stopTimer
+            stopTimer();
         }
     }, 16);
   };
@@ -235,7 +237,6 @@ export default function App() {
         clearInterval(stopIntervalRef.current);
         stopIntervalRef.current = null;
     }
-    // Quickly animate back to 0 or just snap
     setStopProgress(0);
   };
 
@@ -258,6 +259,71 @@ export default function App() {
       if (stopIntervalRef.current) clearInterval(stopIntervalRef.current);
     };
   }, [appState]);
+  
+  // --- SWIPE GESTURE HANDLERS (TOUCH) ---
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (appState !== AppState.IDLE) return;
+    touchStartX.current = e.targetTouches[0].clientX;
+    touchEndX.current = e.targetTouches[0].clientX;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (appState !== AppState.IDLE || touchStartX.current === null) return;
+    touchEndX.current = e.targetTouches[0].clientX;
+  };
+
+  const handleTouchEnd = () => {
+    if (appState !== AppState.IDLE || touchStartX.current === null || touchEndX.current === null) return;
+    
+    const diff = touchStartX.current - touchEndX.current;
+    const SWIPE_THRESHOLD = 50;
+
+    if (Math.abs(diff) > SWIPE_THRESHOLD) {
+      if (diff > 0) { // Swiped left
+        handleModeSelect(selectedModeIndex + 1);
+      } else { // Swiped right
+        handleModeSelect(selectedModeIndex - 1);
+      }
+    }
+    touchStartX.current = null;
+    touchEndX.current = null;
+  };
+
+  // --- SWIPE GESTURE HANDLERS (MOUSE) ---
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (appState !== AppState.IDLE) return;
+    touchStartX.current = e.clientX;
+    isDragging.current = true;
+  };
+
+  const handleMouseUp = (e: React.MouseEvent) => {
+    if (appState !== AppState.IDLE || !isDragging.current || touchStartX.current === null) {
+      isDragging.current = false;
+      return;
+    }
+    isDragging.current = false;
+    touchEndX.current = e.clientX;
+    
+    const diff = touchStartX.current - touchEndX.current;
+    const SWIPE_THRESHOLD = 50;
+
+    if (Math.abs(diff) > SWIPE_THRESHOLD) {
+      if (diff > 0) { // Swiped left
+        handleModeSelect(selectedModeIndex + 1);
+      } else { // Swiped right
+        handleModeSelect(selectedModeIndex - 1);
+      }
+    }
+    touchStartX.current = null;
+    touchEndX.current = null;
+  };
+  
+  const handleMouseLeave = (e: React.MouseEvent) => {
+    if (isDragging.current) {
+      handleMouseUp(e);
+    }
+  };
+
 
   // Wake up time string
   const getWakeUpTimeString = () => {
@@ -272,10 +338,8 @@ export default function App() {
     const screenH = window.innerHeight;
     const y = touch.clientY;
     
-    // Inverted: moving up decreases Y
     const delta = screenH - y;
     
-    // Threshold to unlock
     if (delta > 200) {
         completeSession();
     }
@@ -285,14 +349,14 @@ export default function App() {
 
   const handleAlarmTouchEnd = () => {
     if (appState === AppState.ALARM && slideY < 200) {
-        setSlideY(0); // Snap back
+        setSlideY(0);
     }
   };
 
   // Slide to stop logic - Mouse
   const handleAlarmMouseDown = (e: React.MouseEvent) => {
       if (appState !== AppState.ALARM) return;
-      dragStartY.current = e.clientY; // Use dragStartY as a flag that mouse is down
+      dragStartY.current = e.clientY;
   };
 
   const handleAlarmMouseMove = (e: React.MouseEvent) => {
@@ -301,12 +365,11 @@ export default function App() {
       const screenH = window.innerHeight;
       const y = e.clientY;
       
-      // Moving mouse up decreases Y, so delta (distance from bottom) increases
       const delta = screenH - y;
       
       if (delta > 200) {
           completeSession();
-          dragStartY.current = null; // Reset
+          dragStartY.current = null;
       }
       setSlideY(Math.min(delta, 250));
   };
@@ -343,7 +406,6 @@ export default function App() {
     >
       <Background color={currentMode.themeColor} image={currentMode.bgImage} />
 
-      {/* Hidden File Input */}
       <input 
           type="file" 
           ref={fileInputRef} 
@@ -352,10 +414,8 @@ export default function App() {
           onChange={onFileChange}
       />
 
-      {/* --- SETTINGS MODAL --- */}
       {isSettingsOpen && (
         <div className="fixed inset-0 z-50 bg-[#0B0D14] flex flex-col animate-fade-in">
-            {/* Header */}
             <div className="flex items-center justify-between px-6 py-5 border-b border-white/5 bg-[#0B0D14] shrink-0 z-20">
                 <div className="text-xl font-semibold tracking-wide text-white">设置</div>
                 <button onClick={() => setIsSettingsOpen(false)} className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors">
@@ -363,14 +423,11 @@ export default function App() {
                 </button>
             </div>
             
-            {/* Scrollable Content */}
             <div className="flex-1 overflow-y-auto p-6 pb-12 no-scrollbar">
                 
-                {/* General Settings */}
                 <div className="mb-2">
                     <div className="text-xs text-white/40 font-bold mb-3 uppercase tracking-wider pl-1">通用设置</div>
                     
-                    {/* Snooze */}
                     <div className="bg-[#161821] rounded-xl mb-4 overflow-hidden border border-white/5">
                         <div className="p-4 flex items-center justify-between">
                             <div>
@@ -391,7 +448,6 @@ export default function App() {
                         </div>
                     </div>
 
-                    {/* Painless Wake Up & Audio */}
                     <div className="bg-[#161821] rounded-xl mb-4 overflow-hidden border border-white/5">
                         <div className="p-4 flex items-center justify-between">
                             <div>
@@ -430,7 +486,6 @@ export default function App() {
                         </div>
                     </div>
 
-                    {/* Refresh Audio */}
                     <div className="bg-[#161821] rounded-xl mb-6 overflow-hidden border border-white/5">
                             <div className="p-4 flex items-center justify-between">
                             <div className="flex flex-col">
@@ -451,7 +506,6 @@ export default function App() {
                     </div>
                 </div>
 
-                {/* Mode Exclusive Guide Music */}
                 <div className="mb-2">
                     <div className="text-xs text-white/40 font-bold mb-3 uppercase tracking-wider pl-1">模式专属引导音乐</div>
                     
@@ -491,12 +545,10 @@ export default function App() {
         </div>
       )}
 
-      {/* --- IDLE STATE UI --- */}
       {appState === AppState.IDLE && (
         <div className="flex flex-col h-full animate-fade-in relative z-10">
-            {/* Header / Nav */}
             <div className="pt-12 px-6 flex justify-between items-center text-white/80 relative z-40">
-                <div className="w-6 h-6" /> {/* Spacer for balance since Left icon is removed */}
+                <div className="w-6 h-6" />
                 <div className="text-lg tracking-wide font-medium">小憩</div>
                 <button 
                     onClick={() => setIsSettingsOpen(true)}
@@ -506,7 +558,6 @@ export default function App() {
                 </button>
             </div>
 
-            {/* Mode Selector */}
             <div className="relative z-30">
                 <div 
                     ref={scrollContainerRef}
@@ -525,25 +576,26 @@ export default function App() {
                             {mode.name}
                         </button>
                     ))}
-                    {/* Extra spacing for scrolling */}
                     <div className="w-4 flex-shrink-0" />
                 </div>
             </div>
 
-            {/* Main Center Content */}
-            <div className="flex-1 flex flex-col items-center justify-center mt-0 relative z-10 pointer-events-none">
-                
-                {/* Clock Block */}
-                <div className="relative flex items-center justify-center pointer-events-none min-h-[260px]">
-                    {/* Dashed Circle Background (Decorative) - Hide for custom mode */}
+            <div 
+                className="flex-1 flex flex-col items-center justify-center mt-0 relative z-10 cursor-grab active:cursor-grabbing"
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+                onMouseDown={handleMouseDown}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseLeave}
+            >
+                <div className="relative flex items-center justify-center min-h-[260px]">
                     {currentMode.id !== 'custom' && (
                         <CircularTimer progress={0} size={230} showTicks={true} color="transparent" />
                     )}
                     
-                    {/* Centered Time and Unit */}
                     <div className={`${currentMode.id === 'custom' ? 'relative' : 'absolute inset-0'} flex flex-col items-center justify-center pointer-events-auto`}>
                         
-                        {/* Custom Mode: Scroll Wheel Picker */}
                         {currentMode.id === 'custom' ? (
                             <WheelPicker 
                                 value={customDuration}
@@ -552,7 +604,6 @@ export default function App() {
                                 onChange={setCustomDuration}
                             />
                         ) : (
-                            /* Standard Modes: Static Text */
                             <div className="flex flex-col items-center justify-center select-none">
                                 <div className="text-[72px] leading-none font-thin text-white tracking-tighter tabular-nums drop-shadow-lg flex items-center">
                                     {displayDuration}
@@ -568,18 +619,14 @@ export default function App() {
                     </div>
                 </div>
 
-                {/* NOTE: Wake Up Time Block removed from here to avoid overlap, moved to bottom controls */}
             </div>
 
-            {/* Bottom Controls */}
             <div className="pb-16 flex flex-col items-center justify-center w-full relative z-20">
                 
-                {/* Wake Up Time Block - Moved here for better layout */}
                 <div className="text-white/70 text-sm font-light mb-8 transition-opacity">
                     将在 {getWakeUpTimeString()} 唤醒你
                 </div>
 
-                {/* Custom Music Pill */}
                 <button className="flex items-center space-x-2 bg-white/10 hover:bg-white/20 backdrop-blur-md px-5 py-2.5 rounded-full text-white/90 transition-all border border-white/10 mb-12">
                     <Play className="w-3 h-3 fill-current" />
                     <span className="text-sm">
@@ -591,7 +638,6 @@ export default function App() {
                 </button>
 
                 <div className="flex items-center justify-between w-full px-12">
-                     {/* Removed Music Button, replaced with spacer for layout balance */}
                      <div className="w-6 h-6" />
 
                      <button 
@@ -607,7 +653,7 @@ export default function App() {
                         />
                      </button>
 
-                     <div className="w-6 h-6" /> {/* Spacer for balance */}
+                     <div className="w-6 h-6" />
                 </div>
                 
                 <div className="mt-6 text-white/50 text-xs pointer-events-none">开始小憩</div>
@@ -615,40 +661,31 @@ export default function App() {
         </div>
       )}
 
-      {/* --- RUNNING STATE UI --- */}
       {appState === AppState.RUNNING && (
         <div className="absolute inset-0 z-20 flex flex-col h-full animate-fade-in bg-black/20 backdrop-blur-sm">
-             {/* Header */}
              <div className="pt-12 px-6 flex justify-center items-center text-white/80 relative">
                  <div className="text-lg font-light tracking-wide opacity-80">{currentMode.name.split(' ')[0]}</div>
              </div>
 
-             {/* Main Content */}
              <div className="flex-1 flex flex-col items-center justify-center mt-0">
-                 {/* Clock Block */}
                  <div className="relative flex items-center justify-center">
                      <CircularTimer progress={1 - (timeLeft / (displayDuration * 60))} size={250} color="white" />
                      
                      <div className="absolute inset-0 flex flex-col items-center justify-center">
-                         {/* Precise MM:SS format */}
                          <div className="text-7xl font-thin tabular-nums tracking-tighter text-white leading-none">
                              {m.toString().padStart(2, '0')}:{s.toString().padStart(2, '0')}
                          </div>
                      </div>
                  </div>
 
-                 {/* Wake Up Time Block - Distinctly below */}
                  <div className="text-white/60 text-sm mt-8 font-light tracking-wide">
                      将在 {endTime?.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })} 唤醒你
                  </div>
              </div>
 
-             {/* Bottom Controls */}
              <div className="pb-24 w-full flex flex-col items-center justify-center">
                  <div className="relative flex items-center justify-center">
-                    {/* Long Press Progress Ring */}
                     <svg className="absolute w-[88px] h-[88px] pointer-events-none transform -rotate-90">
-                         {/* Background track */}
                          <circle 
                             r="42" 
                             cx="44" 
@@ -657,7 +694,6 @@ export default function App() {
                             stroke="rgba(255,255,255,0.1)" 
                             strokeWidth="2" 
                          />
-                         {/* Progress indicator */}
                          <circle 
                             r="42" 
                             cx="44" 
@@ -688,11 +724,9 @@ export default function App() {
         </div>
       )}
 
-      {/* --- ALARM/WAKE UP STATE UI --- */}
       {appState === AppState.ALARM && (
         <div className="absolute inset-0 z-30 flex flex-col items-center justify-between pb-16 pt-20 animate-fade-in overflow-hidden">
              
-             {/* Background Image for Alarm */}
              <div className="absolute inset-0 z-[-1]">
                  <img 
                     src="https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?q=80&w=2940&auto=format&fit=crop" 
@@ -700,7 +734,6 @@ export default function App() {
                     alt="Morning"
                  />
                  <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px]" />
-                 {/* Bottom gradient to ensure text readability */}
                  <div className="absolute bottom-0 left-0 w-full h-40 bg-gradient-to-t from-black/80 to-transparent" />
              </div>
 
@@ -717,11 +750,9 @@ export default function App() {
              </div>
 
              <div className="relative w-64 h-64 flex items-center justify-center z-10">
-                {/* Ripples */}
                 <div className="absolute inset-0 border border-white/20 rounded-full animate-ping opacity-20 pointer-events-none" style={{ animationDuration: '3s' }} />
                 <div className="absolute inset-4 border border-white/20 rounded-full animate-ping opacity-30 pointer-events-none" style={{ animationDelay: '0.5s', animationDuration: '3s' }} />
                 
-                {/* Snooze Button - Clickable */}
                 <div 
                     onClick={handleSnooze}
                     className="z-10 bg-white/10 hover:bg-white/20 backdrop-blur-lg w-48 h-48 rounded-full flex flex-col items-center justify-center text-center px-4 border border-white/10 cursor-pointer transition-all active:scale-95 active:bg-white/30"
@@ -743,13 +774,10 @@ export default function App() {
         </div>
       )}
 
-      {/* --- SUMMARY STATE UI --- */}
       {appState === AppState.SUMMARY && sessionStats && (
         <div className="absolute inset-0 z-40 bg-black/60 backdrop-blur-xl flex flex-col items-center justify-center p-6 animate-fade-in">
              
-             {/* Card */}
              <div className="w-full max-w-sm bg-[#2a2a35] rounded-3xl p-6 shadow-2xl relative overflow-hidden">
-                {/* Top illustration placeholder */}
                 <div className="absolute top-0 right-0 w-32 h-32 opacity-20">
                      <img src="https://picsum.photos/id/40/200/200" className="mask-image-gradient" alt="cat" />
                 </div>
