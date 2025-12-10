@@ -1,18 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AppState, NapMode, SessionStats, MusicTrack } from './types';
-import { MODES } from './constants';
+import { MODES } from './constants'; // 👈 确保此文件存在
 import CircularTimer from './components/CircularTimer';
 import Background from './components/Background';
 import WheelPicker from './components/WheelPicker';
 import {
   SettingsIcon,
-  StatsIcon,
   BackIcon,
   InfoIcon,
   IconMap
-} from './components/Icons';
-import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
-import { LocalNotifications } from '@capacitor/local-notifications';
+} from './components/Icons'; // 👈 注意：StatsIcon 不存在 → 删除
 
 const App: React.FC = () => {
   // ========== 状态管理 ==========
@@ -135,7 +132,7 @@ const App: React.FC = () => {
       if (!start) start = timestamp;
       const elapsed = timestamp - start;
       const progress = Math.min(elapsed / duration, 1);
-      setAnimationProgress(progress);
+      setStopProgress(progress); // 👈 改为 setStopProgress，而不是 setAnimationProgress
 
       if (progress < 1) {
         animationFrameRef.current = requestAnimationFrame(animate);
@@ -174,7 +171,6 @@ const App: React.FC = () => {
       setPlayingAudioPath(trackPath);
 
       let src = trackPath;
-      // Capacitor file path conversion
       if (trackPath.startsWith('file://') || trackPath.includes('/Documents/')) {
         src = Capacitor.convertFileSrc(trackPath);
       }
@@ -269,7 +265,6 @@ const App: React.FC = () => {
     const totalSeconds = displayDuration * 60;
     const endTime = new Date(now.getTime() + totalSeconds * 1000);
 
-    // 🚨 新增：预约系统通知（锁屏也能响）
     LocalNotifications.schedule({
       notifications: [{
         id: 1,
@@ -293,7 +288,7 @@ const App: React.FC = () => {
   };
 
   const stopTimer = () => {
-    LocalNotifications.cancel({ notifications: [{ id: 1 }] }); // 🚨 取消通知
+    LocalNotifications.cancel({ notifications: [{ id: 1 }] });
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
     }
@@ -309,13 +304,13 @@ const App: React.FC = () => {
   };
 
   const finishTimer = () => {
-    LocalNotifications.cancel({ notifications: [{ id: 1 }] }); // 🚨 安全取消
+    LocalNotifications.cancel({ notifications: [{ id: 1 }] });
     setAppState(AppState.ALARM);
     playAudio(globalWakeUpMusic?.path);
   };
 
   const completeSession = () => {
-    LocalNotifications.cancel({ notifications: [{ id: 1 }] }); // 🚨 取消通知
+    LocalNotifications.cancel({ notifications: [{ id: 1 }] });
     setAppState(AppState.SUMMARY);
     playAudio(globalRefreshMusic?.path);
   };
@@ -325,7 +320,6 @@ const App: React.FC = () => {
     const totalSeconds = snoozeDuration * 60;
     const endTime = new Date(now.getTime() + totalSeconds * 1000);
 
-    // 🚨 重新预约通知
     LocalNotifications.schedule({
       notifications: [{
         id: 1,
@@ -565,7 +559,7 @@ const App: React.FC = () => {
                 <SettingsIcon />
               </button>
               <button className="p-3 bg-white/10 backdrop-blur-sm rounded-xl">
-                <StatsIcon />
+                <InfoIcon />
               </button>
             </div>
           </div>
