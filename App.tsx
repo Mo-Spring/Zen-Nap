@@ -699,6 +699,7 @@ export default function App() {
                                 min={1}
                                 max={180}
                                 onChange={setCustomDuration}
+                                onClose={() => setShowPicker(false)}
                             />
                         ) : (
                             <div className="flex flex-col items-center justify-center select-none">
