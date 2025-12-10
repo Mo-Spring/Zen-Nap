@@ -9,6 +9,7 @@ interface WheelPickerProps {
 
 export const WheelPicker: React.FC<WheelPickerProps> = ({ value, min, max, onChange }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const debounceTimerRef = useRef<number | null>(null);
   const ITEM_HEIGHT = 64; 
 
   // Generate the range of numbers
@@ -23,14 +24,22 @@ export const WheelPicker: React.FC<WheelPickerProps> = ({ value, min, max, onCha
   }, []);
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    const scrollTop = e.currentTarget.scrollTop;
-    const index = Math.round(scrollTop / ITEM_HEIGHT);
-    const newValue = Math.max(min, Math.min(max, min + index));
-    
-    // Only trigger change if value is different
-    if (newValue !== value) {
-      onChange(newValue);
+    // Clear any existing timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
     }
+    
+    // Set a new timer
+    debounceTimerRef.current = window.setTimeout(() => {
+      const scrollTop = e.currentTarget.scrollTop;
+      const index = Math.round(scrollTop / ITEM_HEIGHT);
+      const newValue = Math.max(min, Math.min(max, min + index));
+      
+      // Only trigger change if value is different
+      if (newValue !== value) {
+        onChange(newValue);
+      }
+    }, 150); // Debounce delay of 150ms
   };
 
   return (
