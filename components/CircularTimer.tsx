@@ -8,6 +8,7 @@ export interface CircularTimerProps {
   seconds: number;
   progress: number;
   color: string;
+  showTicks?: boolean;
 }
 export const CircularTimer: React.FC<CircularTimerProps> = ({ 
   progress, 
