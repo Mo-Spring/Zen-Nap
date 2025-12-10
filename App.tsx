@@ -83,6 +83,7 @@ export default function App() {
   const [appState, setAppState] = useState<AppState>(AppState.IDLE);
   const [selectedModeIndex, setSelectedModeIndex] = useState(2); // Default to efficient 24'
   const [customDuration, setCustomDuration] = useState(30); // Independent state for custom mode
+  const [showWheelPicker, setShowWheelPicker] = useState(false);
   
   // Settings State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
