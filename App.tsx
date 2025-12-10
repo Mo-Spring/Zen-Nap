@@ -13,53 +13,53 @@ const MODES: NapMode[] = [
   {
     id: 'custom',
     name: '自定义',
-    durationMinutes: 30, // Default for custom, but mutable in state
-    themeColor: '#94a3b8', // Slate Blue/Grey for custom
+    durationMinutes: 30,
+    themeColor: '#94a3b8',
     accentColor: 'bg-slate-400',
     iconType: 'custom',
-    bgImage: 'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?q=80&w=2944&auto=format&fit=crop' // Deep space/sky
+    bgImage: 'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?q=80&w=2944&auto=format&fit=crop'
   },
   {
     id: 'scientific',
     name: '科学小盹 10\'',
     durationMinutes: 10,
-    themeColor: '#f472b6', // Pink (Matches Screenshot 12)
+    themeColor: '#f472b6',
     accentColor: 'bg-pink-400',
     iconType: 'coffee',
-    bgImage: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=2946&auto=format&fit=crop' // Pinkish sky/sea
+    bgImage: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=2946&auto=format&fit=crop'
   },
   {
     id: 'efficient',
     name: '高效午休 24\'',
     durationMinutes: 24,
-    themeColor: '#4ade80', // Green (Matches Screenshot 14)
+    themeColor: '#4ade80',
     accentColor: 'bg-green-500',
     iconType: 'lightning',
-    bgImage: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?q=80&w=2560&auto=format&fit=crop' // Forest
+    bgImage: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?q=80&w=2560&auto=format&fit=crop'
   },
   {
     id: 'travel',
     name: '差旅模式 40\'',
     durationMinutes: 40,
-    themeColor: '#fbbf24', // Amber/Gold (Matches Screenshot 15)
+    themeColor: '#fbbf24',
     accentColor: 'bg-amber-400',
     iconType: 'plane',
-    bgImage: 'https://images.unsplash.com/photo-1500964757637-c85e8a162699?q=80&w=2000&auto=format&fit=crop' // Misty Gold Landscape
+    bgImage: 'https://images.unsplash.com/photo-1500964757637-c85e8a162699?q=80&w=2000&auto=format&fit=crop'
   },
   {
     id: 'complete',
     name: '完整午休 90\'',
     durationMinutes: 90,
-    themeColor: '#3b82f6', // Blue (Matches Screenshot 16)
+    themeColor: '#3b82f6',
     accentColor: 'bg-blue-600',
     iconType: 'bed',
-    bgImage: 'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?q=80&w=2613&auto=format&fit=crop' // Foggy City/Blue
+    bgImage: 'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?q=80&w=2613&auto=format&fit=crop'
   }
 ];
 
 interface MusicTrack {
   name: string;
-  path: string; // Native file URI from Capacitor Filesystem
+  path: string;
 }
 
 const fileToBase64 = (file: File): Promise<string> =>
@@ -81,19 +81,17 @@ const PlayingIcon = () => (
 
 export default function App() {
   const [appState, setAppState] = useState<AppState>(AppState.IDLE);
-  const [selectedModeIndex, setSelectedModeIndex] = useState(2); // Default to efficient 24'
-  const [customDuration, setCustomDuration] = useState(30); // Independent state for custom mode
+  const [selectedModeIndex, setSelectedModeIndex] = useState(2);
+  const [customDuration, setCustomDuration] = useState(30);
   
-  // 新增：过渡动画状态
-  const [isTransitioning, setIsTransitioning] = useState(false);
-  const [timerScale, setTimerScale] = useState(1); // 刻度盘放大比例
-  const [uiOpacity, setUiOpacity] = useState(1); // UI元素透明度
-  const [blurAmount, setBlurAmount] = useState(0); // 背景模糊程度
-  
+  // 动画状态 - 简化版，参考iOS设计
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [animationProgress, setAnimationProgress] = useState(0);
+
   // Settings State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [painlessWakeUpDuration, setPainlessWakeUpDuration] = useState(10); // Seconds
-  const [snoozeDuration, setSnoozeDuration] = useState(5); // Minutes
+  const [painlessWakeUpDuration, setPainlessWakeUpDuration] = useState(10);
+  const [snoozeDuration, setSnoozeDuration] = useState(5);
 
   // Music State
   const [globalWakeUpMusic, setGlobalWakeUpMusic] = useState<MusicTrack | null>(null);
@@ -113,35 +111,13 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const timerRef = useRef<number | null>(null);
   const animationFrameRef = useRef<number | null>(null);
-  const transitionAnimationRef = useRef<number | null>(null);
-  const lastUpdateRef = useRef<number>(Date.now());
   
-  // Gesture Refs
-  const [slideY, setSlideY] = useState(0);
-  const dragStartY = useRef<number | null>(null);
-  const touchStartX = useRef<number | null>(null);
-  const touchEndX = useRef<number | null>(null);
-  const isDragging = useRef(false);
-  
-  // Long Press to Stop Refs
-  const [stopProgress, setStopProgress] = useState(0);
-  const stopIntervalRef = useRef<number | null>(null);
-  
-  // Upload Context
-  const [activeUploadContext, setActiveUploadContext] = useState<{
-      field: 'wakeUp' | 'refresh' | 'guide';
-      modeId?: string;
-  } | null>(null);
-
   const currentMode = MODES[selectedModeIndex];
-  // Determine effective duration based on mode
   const displayDuration = currentMode.id === 'custom' ? customDuration : currentMode.durationMinutes;
 
   // --- EFFECTS ---
 
-  // Load settings from localStorage on startup
   useEffect(() => {
     const savedSettings = localStorage.getItem('zenNapSettings');
     if (savedSettings) {
@@ -158,7 +134,6 @@ export default function App() {
     }
   }, []);
 
-  // Save music settings to localStorage whenever they change
   useEffect(() => {
     const settings = {
         music: {
@@ -170,11 +145,9 @@ export default function App() {
     localStorage.setItem('zenNapSettings', JSON.stringify(settings));
   }, [globalWakeUpMusic, globalRefreshMusic, modeGuideMusic]);
 
-  // 修复的计时器逻辑：使用 requestAnimationFrame 避免锁屏节流
+  // 修复的计时器逻辑
   useEffect(() => {
     if (appState === AppState.RUNNING && startTime && timeLeft > 0) {
-      lastUpdateRef.current = Date.now();
-      
       const updateTimer = () => {
         if (!startTime) {
           finishTimer();
@@ -203,48 +176,35 @@ export default function App() {
         cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
       }
-      if (timerRef.current) clearInterval(timerRef.current);
-      if (stopIntervalRef.current) clearInterval(stopIntervalRef.current);
-      if (transitionAnimationRef.current) {
-        cancelAnimationFrame(transitionAnimationRef.current);
-        transitionAnimationRef.current = null;
-      }
     };
   }, [appState, startTime, displayDuration]);
 
-  // 新增：过渡动画效果
-  const startTransitionAnimation = (duration = 800) => {
-    setIsTransitioning(true);
-    
-    let startTime = Date.now();
-    
-    const animate = () => {
-      const elapsed = Date.now() - startTime;
-      const progress = Math.min(elapsed / duration, 1);
+  // 动画效果 - iOS风格渐入渐出
+  useEffect(() => {
+    if (isAnimating) {
+      const duration = 500;
+      const startTime = Date.now();
       
-      // 刻度盘从 1 放大到 1.15
-      setTimerScale(1 + (0.15 * progress));
+      const animate = () => {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        
+        // iOS风格的缓动函数
+        const easeOutCubic = 1 - Math.pow(1 - progress, 3);
+        setAnimationProgress(easeOutCubic);
+        
+        if (progress < 1) {
+          requestAnimationFrame(animate);
+        } else {
+          setIsAnimating(false);
+          setAnimationProgress(0);
+          startTimerInternal();
+        }
+      };
       
-      // UI元素从 1 淡出到 0
-      setUiOpacity(1 - progress);
-      
-      // 背景模糊从 0 增加到 20px
-      setBlurAmount(progress * 20);
-      
-      if (progress < 1) {
-        transitionAnimationRef.current = requestAnimationFrame(animate);
-      } else {
-        // 动画完成后开始计时器
-        setIsTransitioning(false);
-        setTimerScale(1);
-        setUiOpacity(1);
-        setBlurAmount(0);
-        startTimerAfterTransition();
-      }
-    };
-    
-    transitionAnimationRef.current = requestAnimationFrame(animate);
-  };
+      requestAnimationFrame(animate);
+    }
+  }, [isAnimating]);
 
   // --- AUDIO HANDLERS ---
   
@@ -256,42 +216,37 @@ export default function App() {
           return;
       }
 
-      // If already playing this track, pause it (Toggle)
       if (playingAudioPath === trackPath && !audioRef.current.paused) {
           audioRef.current.pause();
           setPlayingAudioPath(null);
           return;
       }
 
-      // 确保使用正确的文件路径
       let audioSrc = trackPath;
       if (Capacitor.isNativePlatform()) {
           audioSrc = Capacitor.convertFileSrc(trackPath);
       }
       
       audioRef.current.src = audioSrc;
-      audioRef.current.load(); // 确保加载音频
+      audioRef.current.load();
       
       audioRef.current.play()
           .then(() => {
-              console.log("Audio playing:", trackPath);
               setPlayingAudioPath(trackPath);
           })
           .catch(e => {
               console.error("Error playing audio:", e);
-              // 如果播放失败，尝试其他格式
-              if (audioSrc !== trackPath) {
-                  audioRef.current!.src = trackPath;
-                  audioRef.current!.play()
-                      .then(() => setPlayingAudioPath(trackPath))
-                      .catch(err => {
-                          console.error("Fallback playback failed:", err);
-                          setPlayingAudioPath(null);
-                      });
-              } else {
-                  setPlayingAudioPath(null);
-              }
+              setPlayingAudioPath(null);
           });
+  };
+
+  // 停止所有音频
+  const stopAllAudio = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      setPlayingAudioPath(null);
+    }
   };
 
   // --- SETTINGS HANDLERS ---
@@ -348,16 +303,14 @@ export default function App() {
   // --- TIMER HANDLERS ---
 
   const handleModeSelect = (index: number) => {
-    if (appState !== AppState.IDLE || isTransitioning) return;
+    if (appState !== AppState.IDLE || isAnimating) return;
     const newIndex = Math.max(0, Math.min(MODES.length - 1, index));
     setSelectedModeIndex(newIndex);
     
-    // 如果是自定义模式，重置自定义时长到该模式的默认值
     if (MODES[newIndex].id === 'custom') {
         setCustomDuration(MODES[newIndex].durationMinutes);
     }
     
-    // Smooth scroll to center the selected item
     const container = scrollContainerRef.current;
     if (container) {
         const buttons = container.querySelectorAll('button');
@@ -373,7 +326,7 @@ export default function App() {
     }
   };
 
-  const startTimerAfterTransition = () => {
+  const startTimerInternal = () => {
     const durationMin = displayDuration;
     const durationSec = durationMin * 60;
     
@@ -401,8 +354,8 @@ export default function App() {
   };
 
   const startTimer = () => {
-    if (isTransitioning || appState !== AppState.IDLE) return;
-    startTransitionAnimation();
+    if (isAnimating || appState !== AppState.IDLE) return;
+    setIsAnimating(true);
   };
 
   const stopTimer = () => {
@@ -410,25 +363,13 @@ export default function App() {
         cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
     }
-    if (timerRef.current) clearInterval(timerRef.current);
-    if (stopIntervalRef.current) {
-        clearInterval(stopIntervalRef.current);
-        stopIntervalRef.current = null;
-    }
-    if (transitionAnimationRef.current) {
-        cancelAnimationFrame(transitionAnimationRef.current);
-        transitionAnimationRef.current = null;
-    }
+    setIsAnimating(false);
+    setAnimationProgress(0);
     setAppState(AppState.IDLE);
-    setIsTransitioning(false);
-    setTimerScale(1);
-    setUiOpacity(1);
-    setBlurAmount(0);
-    setSlideY(0);
-    setStopProgress(0);
     setSessionStats(null);
     setStartTime(null);
     setEndTime(null);
+    stopAllAudio();
   };
 
   const finishTimer = () => {
@@ -436,166 +377,31 @@ export default function App() {
         cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
     }
-    if (timerRef.current) clearInterval(timerRef.current);
     setAppState(AppState.ALARM);
-    // 确保音频正确播放
-    setTimeout(() => {
-      playAudio(globalWakeUpMusic?.path);
-    }, 100);
+    // 播放唤醒音乐
+    if (globalWakeUpMusic?.path) {
+      playAudio(globalWakeUpMusic.path);
+    }
   };
 
   const completeSession = () => {
+    stopAllAudio(); // 用户操作，停止音乐
     setAppState(AppState.SUMMARY);
   };
 
   const handleSnooze = () => {
-      startTimerAfterTransition();
-      setSlideY(0);
+    stopAllAudio(); // 用户点击再睡一会，停止当前音乐
+    startTimerInternal();
+    setSlideY(0);
   };
 
-  // --- GESTURE HANDLERS ---
-  const handleStopPressStart = () => {
-    if (stopIntervalRef.current || isTransitioning) return;
-    const startTime = Date.now();
-    const DURATION = 3000; // 3 seconds
-
-    stopIntervalRef.current = window.setInterval(() => {
-        const elapsed = Date.now() - startTime;
-        const progress = Math.min(elapsed / DURATION, 1);
-        setStopProgress(progress);
-
-        if (progress >= 1) {
-            stopTimer();
-        }
-    }, 16);
-  };
-
-  const handleStopPressEnd = () => {
-    if (stopIntervalRef.current) {
-        clearInterval(stopIntervalRef.current);
-        stopIntervalRef.current = null;
-    }
-    setStopProgress(0);
-  };
-  
-  const handleTouchStart = (e: React.TouchEvent) => {
-    if (appState !== AppState.IDLE || isTransitioning) return;
-    touchStartX.current = e.targetTouches[0].clientX;
-    touchEndX.current = e.targetTouches[0].clientX;
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (appState !== AppState.IDLE || isTransitioning || touchStartX.current === null) return;
-    touchEndX.current = e.targetTouches[0].clientX;
-  };
-
-  const handleTouchEnd = () => {
-    if (appState !== AppState.IDLE || isTransitioning || touchStartX.current === null || touchEndX.current === null) return;
-    
-    const diff = touchStartX.current - touchEndX.current;
-    const SWIPE_THRESHOLD = 50;
-
-    if (Math.abs(diff) > SWIPE_THRESHOLD) {
-      if (diff > 0) { // Swiped left
-        handleModeSelect(selectedModeIndex + 1);
-      } else { // Swiped right
-        handleModeSelect(selectedModeIndex - 1);
-      }
-    }
-    touchStartX.current = null;
-    touchEndX.current = null;
-  };
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (appState !== AppState.IDLE || isTransitioning) return;
-    touchStartX.current = e.clientX;
-    isDragging.current = true;
-  };
-
-  const handleMouseUp = (e: React.MouseEvent) => {
-    if (appState !== AppState.IDLE || isTransitioning || !isDragging.current || touchStartX.current === null) {
-      isDragging.current = false;
-      return;
-    }
-    isDragging.current = false;
-    touchEndX.current = e.clientX;
-    
-    const diff = touchStartX.current - touchEndX.current;
-    const SWIPE_THRESHOLD = 50;
-
-    if (Math.abs(diff) > SWIPE_THRESHOLD) {
-      if (diff > 0) { // Swiped left
-        handleModeSelect(selectedModeIndex + 1);
-      } else { // Swiped right
-        handleModeSelect(selectedModeIndex - 1);
-      }
-    }
-    touchStartX.current = null;
-    touchEndX.current = null;
-  };
-  
-  const handleMouseLeave = (e: React.MouseEvent) => {
-    if (isDragging.current) {
-      handleMouseUp(e);
-    }
-  };
-
+  // 获取唤醒时间字符串
   const getWakeUpTimeString = () => {
     const target = endTime || new Date(new Date().getTime() + displayDuration * 60000);
     return target.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
   };
 
-  const handleAlarmTouchMove = (e: React.TouchEvent) => {
-    if (appState !== AppState.ALARM || isTransitioning) return;
-    const touch = e.touches[0];
-    const screenH = window.innerHeight;
-    const y = touch.clientY;
-    
-    const delta = screenH - y;
-    
-    if (delta > 200) {
-        completeSession();
-    }
-    
-    setSlideY(Math.min(delta, 250));
-  };
-
-  const handleAlarmTouchEnd = () => {
-    if (appState === AppState.ALARM && slideY < 200) {
-        setSlideY(0);
-    }
-  };
-
-  const handleAlarmMouseDown = (e: React.MouseEvent) => {
-      if (appState !== AppState.ALARM || isTransitioning) return;
-      dragStartY.current = e.clientY;
-  };
-
-  const handleAlarmMouseMove = (e: React.MouseEvent) => {
-      if (appState !== AppState.ALARM || isTransitioning || dragStartY.current === null) return;
-      
-      const screenH = window.innerHeight;
-      const y = e.clientY;
-      
-      const delta = screenH - y;
-      
-      if (delta > 200) {
-          completeSession();
-          dragStartY.current = null;
-      }
-      setSlideY(Math.min(delta, 250));
-  };
-
-  const handleAlarmMouseUp = () => {
-      if (appState !== AppState.ALARM || isTransitioning) return;
-      dragStartY.current = null;
-      if (slideY < 200) {
-          setSlideY(0);
-      }
-  };
-
-  // --- RENDER HELPERS ---
-
+  // 格式时间显示
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
@@ -605,34 +411,27 @@ export default function App() {
   const { m, s } = formatTime(timeLeft);
   const StartIcon = IconMap[currentMode.iconType];
 
-  // 计算IDLE状态下显示的刻度盘大小（带缩放）
+  // 动画计算
   const idleTimerSize = currentMode.id === 'custom' ? 260 : 230;
   const runningTimerSize = 250;
-  const displayedTimerSize = isTransitioning ? idleTimerSize * timerScale : 
-                              appState === AppState.IDLE ? idleTimerSize : runningTimerSize;
+  
+  // iOS风格：中心放大，其他淡出
+  const timerScale = 1 + (animationProgress * 0.2);
+  const uiOpacity = 1 - animationProgress;
+  const blurAmount = animationProgress * 10;
 
   return (
-    <div 
-        className="relative w-full h-full overflow-hidden font-light" 
-        onTouchMove={handleAlarmTouchMove} 
-        onTouchEnd={handleAlarmTouchEnd}
-        onMouseDown={handleAlarmMouseDown}
-        onMouseMove={handleAlarmMouseMove}
-        onMouseUp={handleAlarmMouseUp}
-        onMouseLeave={handleAlarmMouseUp}
-    >
+    <div className="relative w-full h-full overflow-hidden font-light">
       <Background color={currentMode.themeColor} image={currentMode.bgImage} />
       
       {/* 背景模糊层 */}
-      {blurAmount > 0 && (
-        <div 
-          className="absolute inset-0 z-10 transition-all duration-300"
-          style={{ 
-            backdropFilter: `blur(${blurAmount}px)`,
-            WebkitBackdropFilter: `blur(${blurAmount}px)`,
-          }}
-        />
-      )}
+      <div 
+        className="absolute inset-0 z-5 transition-all duration-300"
+        style={{ 
+          backdropFilter: `blur(${blurAmount}px)`,
+          WebkitBackdropFilter: `blur(${blurAmount}px)`,
+        }}
+      />
 
       <audio 
         ref={audioRef} 
@@ -780,8 +579,8 @@ export default function App() {
       )}
 
       {appState === AppState.IDLE && (
-        <div className="flex flex-col h-full animate-fade-in relative z-10">
-            {/* 顶部栏 - 带渐隐效果 */}
+        <div className="flex flex-col h-full relative z-10">
+            {/* 顶部栏 */}
             <div 
               className="pt-12 px-6 flex justify-between items-center text-white/80 relative z-40 transition-all duration-500"
               style={{ opacity: uiOpacity }}
@@ -791,20 +590,20 @@ export default function App() {
                 <button 
                     onClick={() => setIsSettingsOpen(true)}
                     className="p-1 rounded-full active:bg-white/10 transition-colors"
-                    disabled={isTransitioning}
+                    disabled={isAnimating}
                 >
                     <SettingsIcon />
                 </button>
             </div>
 
-            {/* 模式选择 - 带渐隐效果 */}
+            {/* 模式选择 */}
             <div 
               className="relative z-30 transition-all duration-500"
               style={{ opacity: uiOpacity }}
             >
                 <div 
                     ref={scrollContainerRef}
-                    className="mt-8 flex overflow-x-auto space-x-2 px-4 pb-4 no-scrollbar snap-x snap-mandatory"
+                    className="mt-8 flex overflow-x-auto space-x-2 px-4 pb-4 no-scrollbar"
                     style={{ maskImage: 'linear-gradient(to right, transparent, black 5%, black 95%, transparent)' }}
                 >
                     {MODES.map((mode, idx) => (
@@ -812,39 +611,30 @@ export default function App() {
                             key={mode.id}
                             onClick={() => handleModeSelect(idx)}
                             className={`
-                                whitespace-nowrap px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 snap-center
+                                whitespace-nowrap px-4 py-2 rounded-full text-sm font-medium transition-all duration-300
                                 ${idx === selectedModeIndex ? 'bg-white/20 text-white backdrop-blur-md border border-white/30' : 'text-white/50 hover:text-white/80'}
                             `}
-                            disabled={isTransitioning}
+                            disabled={isAnimating}
                         >
                             {mode.name}
                         </button>
                     ))}
-                    <div className="w-4 flex-shrink-0" />
                 </div>
             </div>
 
-            <div 
-                className="flex-1 flex flex-col items-center justify-center mt-0 relative z-10 cursor-grab active:cursor-grabbing"
-                onTouchStart={handleTouchStart}
-                onTouchMove={handleTouchMove}
-                onTouchEnd={handleTouchEnd}
-                onMouseDown={handleMouseDown}
-                onMouseUp={handleMouseUp}
-                onMouseLeave={handleMouseLeave}
-            >
+            {/* 主内容区域 */}
+            <div className="flex-1 flex flex-col items-center justify-center">
                 <div className="relative flex items-center justify-center min-h-[260px]">
                     {currentMode.id !== 'custom' && (
                         <div 
                           className="transition-all duration-500 ease-out"
                           style={{ transform: `scale(${timerScale})` }}
                         >
-                          <CircularTimer progress={0} size={displayedTimerSize} showTicks={true} color="transparent" />
+                          <CircularTimer progress={0} size={idleTimerSize} showTicks={true} color="transparent" />
                         </div>
                     )}
                     
-                    <div className={`${currentMode.id === 'custom' ? 'relative' : 'absolute inset-0'} flex flex-col items-center justify-center pointer-events-auto`}>
-                        
+                    <div className={`${currentMode.id === 'custom' ? 'relative' : 'absolute inset-0'} flex flex-col items-center justify-center`}>
                         {currentMode.id === 'custom' ? (
                             <div 
                               className="transition-all duration-500 ease-out"
@@ -862,113 +652,105 @@ export default function App() {
                               className="flex flex-col items-center justify-center select-none transition-all duration-500 ease-out"
                               style={{ transform: `scale(${timerScale})` }}
                             >
-                                <div className="text-[72px] leading-none font-thin text-white tracking-tighter tabular-nums drop-shadow-lg flex items-center">
+                                <div className="text-[72px] leading-none font-thin text-white tracking-tighter tabular-nums drop-shadow-lg">
                                     {displayDuration}
                                 </div>
-                                <div className="flex items-center gap-2 mt-2">
-                                    <div className="text-lg text-white/90 font-light tracking-widest">
-                                        分钟
-                                    </div>
+                                <div className="text-lg text-white/90 font-light tracking-widest mt-2">
+                                    分钟
                                 </div>
                             </div>
                         )}
-
                     </div>
                 </div>
 
-            </div>
-
-            {/* 底部控制区域 - 带渐隐效果 */}
-            <div 
-              className="pb-16 flex flex-col items-center justify-center w-full relative z-20 transition-all duration-500"
-              style={{ opacity: uiOpacity }}
-            >
-                
-                <div className="text-white/70 text-sm font-light mb-8 transition-opacity">
-                    将在 {getWakeUpTimeString()} 唤醒你
-                </div>
-
-                <button 
-                    onClick={() => playAudio(modeGuideMusic[currentMode.id]?.path)}
-                    className="flex items-center space-x-2 bg-white/10 hover:bg-white/20 backdrop-blur-md px-5 py-2.5 rounded-full text-white/90 transition-all border border-white/10 mb-12 h-10"
-                    disabled={isTransitioning}
+                {/* 底部控制区域 */}
+                <div 
+                  className="pb-16 flex flex-col items-center justify-center w-full relative z-20 transition-all duration-500"
+                  style={{ opacity: uiOpacity }}
                 >
-                    {playingAudioPath && playingAudioPath === modeGuideMusic[currentMode.id]?.path ? (
-                        <PlayingIcon />
-                    ) : (
-                        <Play className="w-3 h-3 fill-current" />
-                    )}
-                    <span className="text-sm">
-                        {getMusicStatusText('guide', currentMode.id) 
-                            ? <span className="max-w-[200px] truncate inline-block">专属引导: {getMusicStatusText('guide', currentMode.id)}</span>
-                            : '特制引导音乐'
-                        }
-                    </span>
-                </button>
+                    
+                    <div className="text-white/70 text-sm font-light mb-8">
+                        将在 {getWakeUpTimeString()} 唤醒你
+                    </div>
 
-                <div className="flex items-center justify-between w-full px-12">
-                     <div className="w-6 h-6" />
+                    <button 
+                        onClick={() => playAudio(modeGuideMusic[currentMode.id]?.path)}
+                        className="flex items-center space-x-2 bg-white/10 hover:bg-white/20 backdrop-blur-md px-5 py-2.5 rounded-full text-white/90 transition-all border border-white/10 mb-12 h-10"
+                        disabled={isAnimating}
+                    >
+                        {playingAudioPath && playingAudioPath === modeGuideMusic[currentMode.id]?.path ? (
+                            <PlayingIcon />
+                        ) : (
+                            <Play className="w-3 h-3 fill-current" />
+                        )}
+                        <span className="text-sm">
+                            {getMusicStatusText('guide', currentMode.id) 
+                                ? `专属引导: ${getMusicStatusText('guide', currentMode.id)}`
+                                : '特制引导音乐'
+                            }
+                        </span>
+                    </button>
 
-                     <button 
-                        onClick={startTimer}
-                        className="w-20 h-20 bg-white rounded-full flex items-center justify-center transition-all duration-300 active:scale-95 group relative hover:scale-105"
-                        style={{ 
-                          boxShadow: `0 0 40px ${currentMode.themeColor}50`,
-                          opacity: uiOpacity,
-                          transform: `scale(${isTransitioning ? 0.8 : 1})`
-                        }}
-                        disabled={isTransitioning}
-                     >
-                        <StartIcon 
-                            className="w-8 h-8 transition-colors duration-300"
-                            style={{ color: currentMode.themeColor }}
-                            fill="currentColor" 
-                            strokeWidth={0} 
-                        />
-                     </button>
-
-                     <div className="w-6 h-6" />
+                    <div className="flex items-center justify-center w-full">
+                        <button 
+                            onClick={startTimer}
+                            className="w-20 h-20 bg-white rounded-full flex items-center justify-center transition-all duration-300 active:scale-95 group relative hover:scale-105"
+                            style={{ 
+                              boxShadow: `0 0 40px ${currentMode.themeColor}50`,
+                              opacity: uiOpacity,
+                              transform: `scale(${isAnimating ? 0.9 : 1})`
+                            }}
+                            disabled={isAnimating}
+                        >
+                            <StartIcon 
+                                className="w-8 h-8 transition-colors duration-300"
+                                style={{ color: currentMode.themeColor }}
+                                fill="currentColor" 
+                                strokeWidth={0} 
+                            />
+                        </button>
+                    </div>
+                    
+                    <div className="mt-6 text-white/50 text-xs">开始小憩</div>
                 </div>
-                
-                <div className="mt-6 text-white/50 text-xs pointer-events-none">开始小憩</div>
             </div>
         </div>
       )}
 
       {appState === AppState.RUNNING && (
-        <div className="absolute inset-0 z-20 flex flex-col h-full animate-fade-in bg-black/20 backdrop-blur-sm">
-             <div className="pt-12 px-6 flex justify-center items-center text-white/80 relative">
-                 <div className="text-lg font-light tracking-wide opacity-80">{currentMode.name.split(' ')[0]}</div>
-             </div>
+        <div className="absolute inset-0 z-20 flex flex-col h-full animate-fade-in bg-black/20">
+            <div className="pt-12 px-6 flex justify-center items-center text-white/80">
+                <div className="text-lg font-light tracking-wide opacity-80">{currentMode.name.split(' ')[0]}</div>
+            </div>
 
-             <div className="flex-1 flex flex-col items-center justify-center mt-0">
-                 <div className="relative flex items-center justify-center">
-                     <CircularTimer progress={1 - (timeLeft / (displayDuration * 60))} size={250} color="white" />
-                     
-                     <div className="absolute inset-0 flex flex-col items-center justify-center">
-                         <div className="text-7xl font-thin tabular-nums tracking-tighter text-white leading-none">
-                             {m.toString().padStart(2, '0')}:{s.toString().padStart(2, '0')}
-                         </div>
-                     </div>
-                 </div>
+            <div className="flex-1 flex flex-col items-center justify-center">
+                <div className="relative flex items-center justify-center">
+                    <CircularTimer progress={1 - (timeLeft / (displayDuration * 60))} size={runningTimerSize} color="white" />
+                    
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <div className="text-7xl font-thin tabular-nums tracking-tighter text-white leading-none">
+                            {m.toString().padStart(2, '0')}:{s.toString().padStart(2, '0')}
+                        </div>
+                    </div>
+                </div>
 
-                 <div className="text-white/60 text-sm mt-8 font-light tracking-wide">
-                     将在 {endTime?.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })} 唤醒你
-                 </div>
-             </div>
+                <div className="text-white/60 text-sm mt-8 font-light tracking-wide">
+                    将在 {endTime?.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })} 唤醒你
+                </div>
+            </div>
 
-             <div className="pb-24 w-full flex flex-col items-center justify-center">
-                 <div className="relative flex items-center justify-center">
+            <div className="pb-24 w-full flex flex-col items-center justify-center">
+                <div className="relative flex items-center justify-center">
                     <svg className="absolute w-[88px] h-[88px] pointer-events-none transform -rotate-90">
-                         <circle 
+                        <circle 
                             r="42" 
                             cx="44" 
                             cy="44" 
                             fill="transparent" 
                             stroke="rgba(255,255,255,0.1)" 
                             strokeWidth="2" 
-                         />
-                         <circle 
+                        />
+                        <circle 
                             r="42" 
                             cx="44" 
                             cy="44" 
@@ -979,7 +761,7 @@ export default function App() {
                             strokeDashoffset={2 * Math.PI * 42 * (1 - stopProgress)}
                             strokeLinecap="round"
                             className="transition-all duration-75 ease-linear"
-                         />
+                        />
                     </svg>
 
                     <button 
@@ -989,42 +771,48 @@ export default function App() {
                         onTouchStart={handleStopPressStart}
                         onTouchEnd={handleStopPressEnd}
                         className="w-16 h-16 rounded-full border border-white/30 flex items-center justify-center text-white/80 backdrop-blur-md active:bg-white/10 transition-colors z-10"
-                        disabled={isTransitioning}
                     >
                         <div className="w-3 h-3 bg-white rounded-[1px]" />
                     </button>
-                 </div>
-                 <div className="mt-4 text-white/40 text-xs tracking-wider">长按停止</div>
-             </div>
+                </div>
+                <div className="mt-4 text-white/40 text-xs tracking-wider">长按停止</div>
+            </div>
         </div>
       )}
 
       {appState === AppState.ALARM && (
-        <div className="absolute inset-0 z-30 flex flex-col items-center justify-between pb-16 pt-20 animate-fade-in overflow-hidden">
-             
-             <div className="absolute inset-0 z-[-1]">
-                 <img 
+        <div 
+          className="absolute inset-0 z-30 flex flex-col items-center justify-between pb-16 pt-20 overflow-hidden"
+          onTouchStart={handleAlarmTouchStart}
+          onTouchMove={handleAlarmTouchMove}
+          onTouchEnd={handleAlarmTouchEnd}
+          onMouseDown={handleAlarmMouseDown}
+          onMouseMove={handleAlarmMouseMove}
+          onMouseUp={handleAlarmMouseUp}
+        >
+            <div className="absolute inset-0 z-[-1]">
+                <img 
                     src="https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?q=80&w=2940&auto=format&fit=crop" 
                     className="w-full h-full object-cover opacity-60 scale-110"
                     alt="Morning"
-                 />
-                 <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px]" />
-                 <div className="absolute bottom-0 left-0 w-full h-40 bg-gradient-to-t from-black/80 to-transparent" />
-             </div>
+                />
+                <div className="absolute inset-0 bg-black/60" />
+                <div className="absolute bottom-0 left-0 w-full h-40 bg-gradient-to-t from-black/80 to-transparent" />
+            </div>
 
-             <div className="text-center mt-10 relative z-10">
-                 <div className="flex items-center justify-center mb-4">
+            <div className="text-center mt-10 relative z-10">
+                <div className="flex items-center justify-center mb-4">
                     <Music className="w-6 h-6 text-white/80 mr-2" />
                     <span className="text-white/80 text-lg">
                         {getMusicStatusText('wakeUp') ? `正在播放: ${getMusicStatusText('wakeUp')}` : '小憩结束'}
                     </span>
-                 </div>
-                 <div className="text-7xl font-light text-white mb-2">
+                </div>
+                <div className="text-7xl font-light text-white mb-2">
                     {new Date().toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit', hour12: false})}
-                 </div>
-             </div>
+                </div>
+            </div>
 
-             <div className="relative w-64 h-64 flex items-center justify-center z-10">
+            <div className="relative w-64 h-64 flex items-center justify-center z-10">
                 <div className="absolute inset-0 border border-white/20 rounded-full animate-ping opacity-20 pointer-events-none" style={{ animationDuration: '3s' }} />
                 <div className="absolute inset-4 border border-white/20 rounded-full animate-ping opacity-30 pointer-events-none" style={{ animationDelay: '0.5s', animationDuration: '3s' }} />
                 
@@ -1035,26 +823,25 @@ export default function App() {
                     <div className="text-xl font-medium mb-1">再睡{snoozeDuration}分钟</div>
                     <div className="text-xs text-white/60">「多倍劫」唤醒你</div>
                 </div>
-             </div>
+            </div>
 
-             <div className="flex flex-col items-center w-full relative h-32 justify-end z-10">
-                 <div 
+            <div className="flex flex-col items-center w-full relative h-32 justify-end z-10">
+                <div 
                     className="flex flex-col items-center transition-transform duration-100 ease-out cursor-pointer pb-8"
                     style={{ transform: `translateY(-${slideY}px)` }}
-                 >
-                     <ChevronUp className="w-6 h-6 text-white/70 animate-bounce" />
-                     <div className="text-white/70 text-sm mt-2 font-medium tracking-wide">上滑停止唤醒</div>
-                 </div>
-             </div>
+                >
+                    <ChevronUp className="w-6 h-6 text-white/70 animate-bounce" />
+                    <div className="text-white/70 text-sm mt-2 font-medium tracking-wide">上滑停止唤醒</div>
+                </div>
+            </div>
         </div>
       )}
 
       {appState === AppState.SUMMARY && sessionStats && (
-        <div className="absolute inset-0 z-40 bg-black/60 backdrop-blur-xl flex flex-col items-center justify-center p-6 animate-fade-in">
-             
-             <div className="w-full max-w-sm bg-[#2a2a35] rounded-3xl p-6 shadow-2xl relative overflow-hidden">
+        <div className="absolute inset-0 z-40 bg-black/60 flex flex-col items-center justify-center p-6">
+            <div className="w-full max-w-sm bg-[#2a2a35] rounded-3xl p-6 shadow-2xl relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-32 h-32 opacity-20">
-                     <img src="https://picsum.photos/id/40/200/200" className="mask-image-gradient" alt="cat" />
+                    <img src="https://picsum.photos/id/40/200/200" className="mask-image-gradient" alt="cat" />
                 </div>
                 
                 <div className="relative z-10">
@@ -1088,24 +875,27 @@ export default function App() {
                         onClick={() => playAudio(globalRefreshMusic?.path)}
                         className="bg-[#3b3b47] rounded-xl p-4 flex items-center justify-between w-full hover:bg-[#4a4a58] transition-colors"
                     >
-                         <div className="flex flex-col text-left">
+                        <div className="flex flex-col text-left">
                             <span className="text-gray-300 text-sm">来点提神醒脑白噪音</span>
                             {getMusicStatusText('refresh') && (
                                 <span className="text-xs text-white/50 max-w-[200px] truncate">{getMusicStatusText('refresh')}</span>
                             )}
-                         </div>
-                         {playingAudioPath && playingAudioPath === globalRefreshMusic?.path ? (
+                        </div>
+                        {playingAudioPath && playingAudioPath === globalRefreshMusic?.path ? (
                             <PlayingIcon />
-                         ) : (
+                        ) : (
                             <Play className="w-4 h-4 text-white fill-current" />
-                         )}
+                        )}
                     </button>
                 </div>
-             </div>
+            </div>
 
-             <button onClick={() => setAppState(AppState.IDLE)} className="mt-8 p-4 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
+            <button onClick={() => {
+                stopAllAudio();
+                setAppState(AppState.IDLE);
+            }} className="mt-8 p-4 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
                 <X className="w-6 h-6 text-white" />
-             </button>
+            </button>
         </div>
       )}
     </div>
