@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react'; // 导入 useMemo
 import { Background } from './components/Background';
 import { CircularTimer } from './components/CircularTimer';
 import { WheelPicker } from './components/WheelPicker';
@@ -435,6 +435,7 @@ export default function App() {
     const DURATION = 3000; // 3 seconds
     
     // Start tracking stop progress
+    // 使用 window.setInterval 避免 TypeScript 报错 (在 React Native 环境中应使用 setTimeout)
     stopIntervalRef.current = window.setInterval(() => {
         const elapsed = Date.now() - startTime;
         const progress = Math.min(elapsed / DURATION, 1);
@@ -443,7 +444,7 @@ export default function App() {
         if (progress === 1) {
             stopTimer(); // Complete stop
         }
-    }, 50);
+    }, 50) as unknown as number; // 强制类型转换，确保在浏览器环境中工作
   };
 
   const handleStopPressEnd = () => {
@@ -456,6 +457,7 @@ export default function App() {
   
   // Handlers for mode selection drag gesture
   const handleTouchStart = (e: React.TouchEvent) => {
+    // 只有在 IDLE 状态且没有动画时才处理
     if (appState !== AppState.IDLE || isAnimating) return;
     touchStartX.current = e.touches[0].clientX;
     isDragging.current = false;
@@ -472,70 +474,24 @@ export default function App() {
   const handleTouchEnd = (e: React.TouchEvent) => {
     if (touchStartX.current === null || appState !== AppState.IDLE || isAnimating) return;
     
-    // Check if it was a significant drag
+    // 检查是否是一次有效的滑动
     if (isDragging.current) {
       const deltaX = e.changedTouches[0].clientX - touchStartX.current;
-      if (Math.abs(deltaX) > 50) { // Swipe threshold
+      if (Math.abs(deltaX) > 50) { // 滑动阈值
         if (deltaX < 0) {
-          // Swiped left
+          // Swiped left (选择下一个模式)
           handleModeSelect(selectedModeIndex + 1);
         } else {
-          // Swiped right
+          // Swiped right (选择上一个模式)
           handleModeSelect(selectedModeIndex - 1);
         }
       }
     }
     touchStartX.current = null;
-    touchEndX.current = null;
     isDragging.current = false;
   };
-  
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (appState !== AppState.IDLE || isAnimating) return;
-    touchStartX.current = e.clientX;
-    isDragging.current = false;
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-  };
 
-  const handleMouseMove = (e: MouseEvent) => {
-    if (touchStartX.current === null || appState !== AppState.IDLE || isAnimating) return;
-    const deltaX = e.clientX - touchStartX.current;
-    if (Math.abs(deltaX) > 10) {
-      isDragging.current = true;
-    }
-  };
-
-  const handleMouseUp = (e: MouseEvent | React.MouseEvent) => {
-    if (touchStartX.current === null || appState !== AppState.IDLE || isAnimating) return;
-    
-    if (isDragging.current) {
-      const deltaX = e.clientX - touchStartX.current;
-      if (Math.abs(deltaX) > 50) {
-        if (deltaX < 0) {
-          // Swiped left
-          handleModeSelect(selectedModeIndex + 1);
-        } else {
-          // Swiped right
-          handleModeSelect(selectedModeIndex - 1);
-        }
-      }
-    }
-    touchStartX.current = null;
-    touchEndX.current = null;
-    isDragging.current = false;
-    document.removeEventListener('mousemove', handleMouseMove);
-    document.removeEventListener('mouseup', handleMouseUp);
-  };
-  
-  const handleMouseLeave = (e: React.MouseEvent) => {
-    if (isDragging.current) {
-      // @ts-ignore
-      handleMouseUp(e);
-    }
-  };
-
-  // 闹钟页面手势处理
+  // 闹钟页面手势处理 (仅保留触摸事件)
   const handleAlarmTouchStart = (e: React.TouchEvent) => {
     if (appState !== AppState.ALARM) return;
     dragStartY.current = e.touches[0].clientY;
@@ -546,50 +502,28 @@ export default function App() {
     const touch = e.touches[0];
     const screenH = window.innerHeight;
     const y = touch.clientY;
+    
+    // 计算从底部向上的滑动距离 (屏幕高度 - 当前Y坐标)
     const delta = screenH - y;
+    
+    // 如果滑动距离超过阈值，直接完成会话
     if (delta > 200) {
       completeSession();
+      dragStartY.current = null; // 避免在 touchEnd 中重复处理
     }
+    
+    // 设置滑动效果，最大限制为 250px
     setSlideY(Math.min(delta, 250));
   };
 
   const handleAlarmTouchEnd = () => {
     if (appState === AppState.ALARM && slideY < 200) {
+      // 如果滑动结束但未达到阈值，则将滑动效果复位
       setSlideY(0);
     }
-  };
-
-  const handleAlarmMouseDown = (e: React.MouseEvent) => {
-    if (appState !== AppState.ALARM) return;
-    dragStartY.current = e.clientY;
-    document.addEventListener('mousemove', handleAlarmMouseMove);
-    document.addEventListener('mouseup', handleAlarmMouseUp);
-  };
-
-  const handleAlarmMouseMove = (e: MouseEvent) => {
-    if (appState !== AppState.ALARM || dragStartY.current === null) return;
-    const screenH = window.innerHeight;
-    const y = e.clientY;
-    const delta = screenH - y;
-    if (delta > 200) {
-      completeSession();
-      dragStartY.current = null;
-      document.removeEventListener('mousemove', handleAlarmMouseMove);
-      document.removeEventListener('mouseup', handleAlarmMouseUp);
-    }
-    setSlideY(Math.min(delta, 250));
-  };
-
-  const handleAlarmMouseUp = () => {
-    if (appState !== AppState.ALARM) return;
     dragStartY.current = null;
-    if (slideY < 200) {
-      setSlideY(0);
-    }
-    document.removeEventListener('mousemove', handleAlarmMouseMove);
-    document.removeEventListener('mouseup', handleAlarmMouseUp);
   };
-  
+
   // 获取唤醒时间字符串
   const getWakeUpTimeString = () => {
     const target = endTime || new Date(Date.now() + displayDuration * 60000);
@@ -611,12 +545,11 @@ export default function App() {
   return (
     <div 
       className="relative h-screen w-screen overflow-hidden text-white"
+      // 顶级容器只保留触摸事件
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
-      onMouseDown={handleMouseDown}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseLeave}
+      // 移除 onMouseDown, onMouseUp, onMouseLeave
     >
       <Background color={currentMode.themeColor} image={currentMode.bgImage} />
       
@@ -631,9 +564,10 @@ export default function App() {
       {/* 音频播放器 (隐藏) */}
       <audio ref={audioRef} />
 
-      {/* Settings Modal */}
+      {/* Settings Modal (内容省略) */}
       {isSettingsOpen && (
         <div className="fixed inset-0 z-50 bg-[#0B0D14]/90 backdrop-blur-md flex flex-col animate-fade-in">
+          {/* ... Settings UI ... */}
           <div className="flex items-center justify-between px-6 py-5 border-b border-white/5 bg-[#0B0D14] shrink-0 z-20">
             <div className="text-xl font-semibold tracking-wide text-white">设置</div>
             <button onClick={() => setIsSettingsOpen(false)} className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors">
@@ -771,7 +705,7 @@ export default function App() {
                           </button>
                         </div>
                       </div>
-                      {idx < MODES.length - 1 && <div className="border-t border-white/5 mx-4" />}
+                      {idx < MODES.filter(m => m.id !== 'custom').length - 1 && <div className="border-t border-white/5 mx-4" />}
                     </div>
                   );
                 })}
@@ -827,12 +761,11 @@ export default function App() {
           {/* 核心显示/滚轮区 */}
           <div 
             className="flex-1 flex flex-col items-center justify-center pt-8 relative z-20"
+            // 模式滑动/滚轮选择区域只保留触摸事件
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
-            onMouseDown={handleMouseDown}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseLeave}
+            // 移除 onMouseDown, onMouseUp, onMouseLeave
           >
             {/* 模式图标 */}
             <div 
@@ -926,10 +859,10 @@ export default function App() {
 
           <div className="pb-12 pt-6 flex flex-col items-center relative z-20">
             <button 
-                onMouseDown={handleStopPressStart} 
-                onMouseUp={handleStopPressEnd} 
+                // 只保留触摸事件
                 onTouchStart={handleStopPressStart}
                 onTouchEnd={handleStopPressEnd}
+                // 移除 onMouseDown, onMouseUp
                 className="w-20 h-20 bg-white/10 rounded-full flex items-center justify-center transition-all duration-300 active:scale-95 group relative overflow-hidden"
             >
                 {/* 停止进度条 */}
@@ -948,12 +881,11 @@ export default function App() {
       {appState === AppState.ALARM && (
         <div 
           className="absolute inset-0 z-20 flex flex-col h-full items-center justify-end bg-black/80 animate-fade-in"
+          // 只保留触摸事件
           onTouchStart={handleAlarmTouchStart}
           onTouchMove={handleAlarmTouchMove}
           onTouchEnd={handleAlarmTouchEnd}
-          onMouseDown={handleAlarmMouseDown}
-          onMouseMove={handleAlarmMouseMove}
-          onMouseUp={handleAlarmMouseUp}
+          // 移除 onMouseDown, onMouseMove, onMouseUp
         >
           <div className="absolute inset-0 z-0 flex flex-col items-center justify-center">
             <div className="text-7xl font-thin tabular-nums tracking-tighter text-white leading-none mb-6 opacity-30 pointer-events-none" style={{ animationDelay: '0.5s', animationDuration: '3s' }}>
@@ -990,7 +922,7 @@ export default function App() {
         </div>
       )}
 
-      {/* SUMMARY State */}
+      {/* SUMMARY State (内容省略) */}
       {appState === AppState.SUMMARY && sessionStats && (
         <div className="absolute inset-0 z-20 flex flex-col h-full items-center justify-start bg-black/80 animate-fade-in">
             <div className="pt-20 px-6 flex flex-col items-center text-white/80 w-full">
