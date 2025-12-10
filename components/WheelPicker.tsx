@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, UIEvent, useState } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 
 interface WheelPickerProps {
   value: number;
@@ -9,15 +9,14 @@ interface WheelPickerProps {
 
 export const WheelPicker: React.FC<WheelPickerProps> = ({ value, min, max, onChange }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const isScrolling = useRef<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [scrollTop, setScrollTop] = useState(0);
-  const ITEM_HEIGHT = 64; 
+  const ITEM_HEIGHT = 60;
+  const VISIBLE_ITEMS = 5;
 
-  // Generate the range of numbers
   const range = Array.from({ length: max - min + 1 }, (_, i) => i + min);
 
-  // Sync scroll position with value on initial mount
+  // 初始化和同步滚动位置
   useEffect(() => {
     if (containerRef.current && !isDragging) {
       const index = value - min;
@@ -30,121 +29,138 @@ export const WheelPicker: React.FC<WheelPickerProps> = ({ value, min, max, onCha
   }, [value, min, max, isDragging]);
 
   const handleScrollEnd = () => {
-    if (!containerRef.current || isDragging) return;
+    if (!containerRef.current) return;
     
-    const scrollTop = containerRef.current.scrollTop;
-    
-    // 修复：使用 Math.round 确保选择正确的项目，但要考虑惯性滚动
-    const rawIndex = scrollTop / ITEM_HEIGHT;
-    const index = Math.round(rawIndex);
-    const newValue = Math.max(min, Math.min(max, min + index));
+    const currentScrollTop = containerRef.current.scrollTop;
+    const rawIndex = currentScrollTop / ITEM_HEIGHT;
+    const roundedIndex = Math.round(rawIndex);
+    const newValue = Math.max(min, Math.min(max, min + roundedIndex));
 
-    // 修复：只有在值改变时才更新和滚动
-    if (newValue !== value) {
-      const targetScrollTop = index * ITEM_HEIGHT;
-      
-      // 平滑滚动到目标位置
+    // 平滑滚动到准确位置
+    const targetScrollTop = roundedIndex * ITEM_HEIGHT;
+    
+    if (Math.abs(currentScrollTop - targetScrollTop) > 1) {
       containerRef.current.scrollTo({
         top: targetScrollTop,
-        behavior: 'smooth',
+        behavior: 'smooth'
       });
-      
+    }
+    
+    if (newValue !== value) {
       onChange(newValue);
     }
     
     setIsDragging(false);
   };
 
-  const onScroll = (e: UIEvent<HTMLDivElement>) => {
-    e.stopPropagation();
+  const handleScroll = () => {
     if (!containerRef.current) return;
     
     const currentScrollTop = containerRef.current.scrollTop;
     setScrollTop(currentScrollTop);
     setIsDragging(true);
     
-    if (isScrolling.current) {
-      clearTimeout(isScrolling.current);
+    // 清除之前的定时器
+    if ((window as any).wheelScrollTimeout) {
+      clearTimeout((window as any).wheelScrollTimeout);
     }
     
-    isScrolling.current = window.setTimeout(() => {
+    // 设置新的定时器
+    (window as any).wheelScrollTimeout = setTimeout(() => {
       handleScrollEnd();
     }, 150);
   };
 
-  const onTouchStart = () => {
-    setIsDragging(true);
+  // 阻止事件冒泡
+  const stopPropagation = (e: React.SyntheticEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
   };
 
-  const onTouchEnd = () => {
-    if (isScrolling.current) {
-      clearTimeout(isScrolling.current);
-    }
-    isScrolling.current = window.setTimeout(() => {
-      handleScrollEnd();
-    }, 100);
-  };
-
-  const stopPropagation = (e: React.SyntheticEvent) => e.stopPropagation();
-
-  // 计算中心位置（修正了之前的错误）
-  const centerPosition = scrollTop + ITEM_HEIGHT * 2; // 容器高度的一半
+  // 计算中心位置
+  const centerY = scrollTop + (ITEM_HEIGHT * (VISIBLE_ITEMS / 2));
 
   return (
-    <div 
-      className="relative h-[256px] w-[260px] flex items-center justify-center"
-      onTouchStart={stopPropagation}
-      onTouchMove={stopPropagation}
-      onMouseDown={stopPropagation}
-    >
+    <div className="relative h-[300px] w-full flex items-center justify-center">
       
-      {/* Selection Lines / Scale Indicators */}
-      <div className="absolute top-1/2 left-4 right-4 h-[64px] -translate-y-1/2 border-y border-white/20 pointer-events-none z-20" />
-
-      {/* Fixed "Minutes" Label */}
-      <div className="absolute right-12 top-1/2 -translate-y-1/2 mt-1 z-30 pointer-events-none">
-          <span className="text-sm font-medium text-white/50 tracking-widest">分钟</span>
+      {/* 中心指示线 - 更明显的样式 */}
+      <div className="absolute top-1/2 left-0 right-0 flex items-center justify-center z-20">
+        <div className="wheel-center-line w-48 h-[3px] rounded-full" />
+        <div className="absolute left-4 right-4 h-[60px] border-t border-b border-white/30 -translate-y-1/2" />
       </div>
 
-      {/* Scrollable Container with Mask for Fade Effect */}
+      {/* 分钟标签 */}
+      <div className="absolute right-8 top-1/2 -translate-y-1/2 z-30 pointer-events-none">
+        <span className="text-lg font-medium text-white/60 tracking-widest">分钟</span>
+      </div>
+
+      {/* 滚轮容器 */}
       <div 
         ref={containerRef}
-        className="h-full w-full overflow-y-scroll no-scrollbar py-[96px]"
-        onScroll={onScroll}
-        onTouchStart={onTouchStart}
-        onTouchEnd={onTouchEnd}
-        onMouseDown={onTouchStart}
-        onMouseUp={onTouchEnd}
+        className="h-full w-full overflow-y-scroll no-scrollbar py-[120px]"
+        onScroll={handleScroll}
+        onTouchStart={stopPropagation}
+        onTouchMove={stopPropagation}
+        onTouchEnd={() => {
+          stopPropagation;
+          setTimeout(handleScrollEnd, 100);
+        }}
+        onMouseDown={() => setIsDragging(true)}
+        onMouseUp={() => {
+          setIsDragging(false);
+          handleScrollEnd();
+        }}
         style={{
-          maskImage: 'linear-gradient(to bottom, transparent 0%, black 25%, black 75%, transparent 100%)',
-          WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 25%, black 75%, transparent 100%)'
+          maskImage: 'linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)',
+          WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)'
         }}
       >
         {range.map((num) => {
           const itemTop = (num - min) * ITEM_HEIGHT;
           const itemCenter = itemTop + ITEM_HEIGHT / 2;
-          const distance = Math.abs(centerPosition - itemCenter);
+          const distance = Math.abs(centerY - itemCenter);
           
-          // 更精确的计算，避免跳跃
-          const scale = 0.8 + 0.4 * Math.max(0, 1 - distance / (ITEM_HEIGHT * 1.5));
-          const opacity = 0.3 + 0.7 * Math.max(0, 1 - distance / (ITEM_HEIGHT * 1.5));
+          // 计算缩放和透明度
+          let scale = 1;
+          let opacity = 1;
+          let fontSize = 'text-[60px]';
           
-          const isSelected = distance < ITEM_HEIGHT / 3;
+          if (distance < ITEM_HEIGHT * 0.6) {
+            // 中心区域 - 最大
+            scale = 1;
+            opacity = 1;
+            fontSize = 'text-[72px]';
+          } else if (distance < ITEM_HEIGHT * 1.2) {
+            // 过渡区域
+            const t = (distance - ITEM_HEIGHT * 0.6) / (ITEM_HEIGHT * 0.6);
+            scale = 0.9 + 0.1 * (1 - t);
+            opacity = 0.7 + 0.3 * (1 - t);
+            fontSize = 'text-[64px]';
+          } else {
+            // 边缘区域
+            const t = Math.min(1, (distance - ITEM_HEIGHT * 1.2) / (ITEM_HEIGHT * 2));
+            scale = 0.8 + 0.1 * (1 - t);
+            opacity = 0.3 + 0.4 * (1 - t);
+            fontSize = 'text-[56px]';
+          }
+          
+          const isSelected = distance < ITEM_HEIGHT * 0.3;
           
           return (
             <div 
               key={num} 
-              className="h-[64px] flex items-center justify-center select-none"
+              className={`wheel-item h-[60px] flex items-center justify-center select-none ${fontSize}`}
               style={{
                 transform: `scale(${scale})`,
                 opacity: opacity,
-                transition: isDragging ? 'none' : 'transform 150ms ease, opacity 150ms ease'
+                transition: isDragging ? 'none' : 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
+                color: isSelected ? 'white' : 'rgba(255,255,255,0.8)'
               }}
             >
-              <span className={`font-light tabular-nums leading-none tracking-tight text-white ${
-                  isSelected ? 'text-[72px]' : 'text-[60px]'
+              <span className={`font-light tabular-nums leading-none tracking-tight ${
+                isSelected ? 'font-medium' : ''
               }`}>
-                  {num}
+                {num}
               </span>
             </div>
           );
