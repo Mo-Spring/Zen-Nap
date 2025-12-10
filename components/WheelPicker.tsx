@@ -10,62 +10,85 @@ interface WheelPickerProps {
 export const WheelPicker: React.FC<WheelPickerProps> = ({ value, min, max, onChange }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const isScrolling = useRef<number | null>(null);
-  const [currentScrollTop, setCurrentScrollTop] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [scrollTop, setScrollTop] = useState(0);
   const ITEM_HEIGHT = 64; 
 
   // Generate the range of numbers
   const range = Array.from({ length: max - min + 1 }, (_, i) => i + min);
 
-  // Sync scroll position with value on initial mount or when value changes externally
+  // Sync scroll position with value on initial mount
   useEffect(() => {
-    if (containerRef.current) {
+    if (containerRef.current && !isDragging) {
       const index = value - min;
       const targetScrollTop = index * ITEM_HEIGHT;
-      // Only set scroll position if it's not already there, to avoid conflicts with user scrolling
       if (Math.abs(containerRef.current.scrollTop - targetScrollTop) > 1) {
         containerRef.current.scrollTop = targetScrollTop;
-        setCurrentScrollTop(targetScrollTop);
+        setScrollTop(targetScrollTop);
       }
     }
-  }, [value, min, max]);
+  }, [value, min, max, isDragging]);
 
   const handleScrollEnd = () => {
-    if (!containerRef.current) return;
+    if (!containerRef.current || isDragging) return;
     
     const scrollTop = containerRef.current.scrollTop;
-    setCurrentScrollTop(scrollTop);
     
-    // 修复：使用 Math.round 确保选择正确的项目
-    const index = Math.round(scrollTop / ITEM_HEIGHT);
+    // 修复：使用 Math.round 确保选择正确的项目，但要考虑惯性滚动
+    const rawIndex = scrollTop / ITEM_HEIGHT;
+    const index = Math.round(rawIndex);
     const newValue = Math.max(min, Math.min(max, min + index));
 
-    // Snap to the nearest item
-    const targetScrollTop = index * ITEM_HEIGHT;
-    containerRef.current.scrollTo({
-      top: targetScrollTop,
-      behavior: 'smooth',
-    });
-
-    // Update the state if the value has changed
+    // 修复：只有在值改变时才更新和滚动
     if (newValue !== value) {
+      const targetScrollTop = index * ITEM_HEIGHT;
+      
+      // 平滑滚动到目标位置
+      containerRef.current.scrollTo({
+        top: targetScrollTop,
+        behavior: 'smooth',
+      });
+      
       onChange(newValue);
     }
+    
+    setIsDragging(false);
   };
 
   const onScroll = (e: UIEvent<HTMLDivElement>) => {
-    e.stopPropagation(); // Prevent parent swipe gestures
+    e.stopPropagation();
     if (!containerRef.current) return;
     
-    const scrollTop = containerRef.current.scrollTop;
-    setCurrentScrollTop(scrollTop);
+    const currentScrollTop = containerRef.current.scrollTop;
+    setScrollTop(currentScrollTop);
+    setIsDragging(true);
     
     if (isScrolling.current) {
       clearTimeout(isScrolling.current);
     }
-    isScrolling.current = window.setTimeout(handleScrollEnd, 150);
+    
+    isScrolling.current = window.setTimeout(() => {
+      handleScrollEnd();
+    }, 150);
   };
-  
+
+  const onTouchStart = () => {
+    setIsDragging(true);
+  };
+
+  const onTouchEnd = () => {
+    if (isScrolling.current) {
+      clearTimeout(isScrolling.current);
+    }
+    isScrolling.current = window.setTimeout(() => {
+      handleScrollEnd();
+    }, 100);
+  };
+
   const stopPropagation = (e: React.SyntheticEvent) => e.stopPropagation();
+
+  // 计算中心位置（修正了之前的错误）
+  const centerPosition = scrollTop + ITEM_HEIGHT * 2; // 容器高度的一半
 
   return (
     <div 
@@ -86,33 +109,36 @@ export const WheelPicker: React.FC<WheelPickerProps> = ({ value, min, max, onCha
       {/* Scrollable Container with Mask for Fade Effect */}
       <div 
         ref={containerRef}
-        className="h-full w-full overflow-y-scroll snap-y snap-mandatory no-scrollbar py-[96px]"
+        className="h-full w-full overflow-y-scroll no-scrollbar py-[96px]"
         onScroll={onScroll}
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+        onMouseDown={onTouchStart}
+        onMouseUp={onTouchEnd}
         style={{
           maskImage: 'linear-gradient(to bottom, transparent 0%, black 25%, black 75%, transparent 100%)',
           WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 25%, black 75%, transparent 100%)'
         }}
       >
         {range.map((num) => {
-          // 修复：使用当前的 scrollTop 来计算距离，而不是 scrollTop + ITEM_HEIGHT * 1.5
-          const center = currentScrollTop + (ITEM_HEIGHT * 1); // 改为 *1，因为中心点是第一行
           const itemTop = (num - min) * ITEM_HEIGHT;
-          const itemCenter = itemTop + (ITEM_HEIGHT / 2);
-          const distance = Math.abs(center - itemCenter);
-          const scale = Math.max(0.8, 1 - distance / (ITEM_HEIGHT * 2)); // 调整计算参数
-          const opacity = Math.max(0.3, 1 - distance / (ITEM_HEIGHT * 2));
+          const itemCenter = itemTop + ITEM_HEIGHT / 2;
+          const distance = Math.abs(centerPosition - itemCenter);
           
-          // 判断是否选中（距离小于阈值）
-          const isSelected = distance < ITEM_HEIGHT / 2;
+          // 更精确的计算，避免跳跃
+          const scale = 0.8 + 0.4 * Math.max(0, 1 - distance / (ITEM_HEIGHT * 1.5));
+          const opacity = 0.3 + 0.7 * Math.max(0, 1 - distance / (ITEM_HEIGHT * 1.5));
+          
+          const isSelected = distance < ITEM_HEIGHT / 3;
           
           return (
             <div 
               key={num} 
-              className="h-[64px] flex items-center justify-center snap-center select-none"
+              className="h-[64px] flex items-center justify-center select-none"
               style={{
                 transform: `scale(${scale})`,
                 opacity: opacity,
-                transition: 'transform 150ms ease, opacity 150ms ease'
+                transition: isDragging ? 'none' : 'transform 150ms ease, opacity 150ms ease'
               }}
             >
               <span className={`font-light tabular-nums leading-none tracking-tight text-white ${
