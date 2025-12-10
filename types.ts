@@ -1,3 +1,7 @@
+enum AppState { IDLE, RUNNING, ALARM, SUMMARY }
+interface NapMode { /* ... */ }
+interface SessionStats { /* ... */ }
+
 export enum AppState {
   IDLE = 'IDLE',
   RUNNING = 'RUNNING',
