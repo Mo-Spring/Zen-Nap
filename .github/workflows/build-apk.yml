@@ -2,57 +2,51 @@ name: Build Android APK
 
 on:
   push:
-branches:
-      - main
-      - master
+    branches: [main, master]
   workflow_dispatch:
 
 jobs:
   build:
-    name: Build APK
     runs-on: ubuntu-latest
-
+    
     steps:
-      - name: Checkout Source
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'npm'
-
-      - name: Clean npm Cache
-        run: npm cache clean --force
-
-      - name: Install Dependencies
-        run: npm install
-
-      - name: Build Web App
-        run: npm run build
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: '17'
-
-      - name: Add Android Platform
-        run: npx cap add android
-
-      - name: Sync Capacitor
-        run: npx cap sync
-
-      - name: Grant gradlew execute permission
-        run: chmod +x android/gradlew
-
-      - name: Build APK
-        run: |
-          cd android
-          ./gradlew assembleDebug
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: zen-nap-timer-debug
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        
+    - name: Install dependencies
+      run: |
+        # 完全清理
+        rm -rf node_modules package-lock.json
+        
+        # 使用npm ci安装，更稳定
+        npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+        
+    - name: Build project
+      run: npm run build
+      
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+        
+    - name: Add Android platform
+      run: |
+        npx cap add android || true
+        npx cap sync
+        
+    - name: Build APK
+      run: |
+        cd android
+        chmod +x gradlew
+        ./gradlew assembleDebug
+        
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: zen-nap-timer
+        path: android/app/build/outputs/apk/debug/app-debug.apk
