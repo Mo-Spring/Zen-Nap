@@ -1,5 +1,4 @@
-import React from 'react';
-import { Zap, Coffee, Plane, Moon, Settings, Music, BarChart2, X, ChevronLeft, Info, Hexagon } from 'lucide-react';
+import { Zap, Coffee, Plane, Moon, Settings, BarChart2, ChevronLeft, Info, Hexagon } from 'lucide-react';
 
 export const IconMap = {
   lightning: Zap,
