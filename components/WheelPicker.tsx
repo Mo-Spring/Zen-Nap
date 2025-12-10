@@ -22,9 +22,15 @@ export const WheelPicker: React.FC<WheelPickerProps> = ({ value, min, max, onCha
     if (containerRef.current && !isDragging) {
       const index = value - min;
       const targetScrollTop = index * ITEM_HEIGHT;
-      if (Math.abs(containerRef.current.scrollTop - targetScrollTop) > 1) {
-        containerRef.current.scrollTop = targetScrollTop;
-        setScrollTop(targetScrollTop);
+      
+      // 首次渲染后，将滚动位置设置为正确的初始值
+      // 修正: 加上额外的顶部填充高度，以使值居中
+      const topPadding = (containerRef.current.offsetHeight - ITEM_HEIGHT) / 2;
+      const finalScrollTop = targetScrollTop - topPadding;
+      
+      if (Math.abs(containerRef.current.scrollTop - finalScrollTop) > 1) {
+        containerRef.current.scrollTop = finalScrollTop;
+        setScrollTop(finalScrollTop);
       }
     }
   }, [value, min, max, isDragging]);
@@ -34,15 +40,19 @@ export const WheelPicker: React.FC<WheelPickerProps> = ({ value, min, max, onCha
     
     const currentScrollTop = containerRef.current.scrollTop;
     
-    // 计算应该对齐的索引
-    // 我们希望数字的中心对齐到容器的中心，即 (container.offsetHeight / 2)
-    // 滚轮的中心线对应于 itemTop + ITEM_HEIGHT/2
-    // 由于我们想要将项目中心对齐到容器的中心，因此我们应该将滚动位置四舍五入到最近的项目顶部。
-    const index = Math.round(currentScrollTop / ITEM_HEIGHT);
+    // 获取上下填充空间
+    const topPadding = (containerRef.current.offsetHeight - ITEM_HEIGHT) / 2;
+    
+    // 计算滚轮的逻辑起始位置（减去顶部填充空间）
+    const logicalScrollTop = currentScrollTop + topPadding;
+
+    // 计算应该对齐的索引 (四舍五入到最近的项目顶部)
+    const index = Math.round(logicalScrollTop / ITEM_HEIGHT);
     const newValue = Math.max(min, Math.min(max, min + index));
 
-    // 计算目标滚动位置
-    const targetScrollTop = index * ITEM_HEIGHT;
+    // 计算目标滚动位置 (从逻辑位置减去填充空间)
+    const targetLogicalTop = index * ITEM_HEIGHT;
+    const targetScrollTop = targetLogicalTop - topPadding;
     
     // 平滑滚动到目标位置
     containerRef.current.scrollTo({
@@ -82,23 +92,35 @@ export const WheelPicker: React.FC<WheelPickerProps> = ({ value, min, max, onCha
     }
   };
 
-  // 如果滚轮未渲染，则不执行计算
+  // 1. 初始渲染时 containerRef.current 为 null，必须先返回
   if (!containerRef.current) {
+      // 渲染一个占位符或包含滚轮容器但没有内部 item 的版本，避免访问 offsetHeight
+      // 这里的 height 320px 必须与容器的 h-[320px] 匹配
+      const contentHeight = range.length * ITEM_HEIGHT;
+      const placeholderHeight = 320;
+      
       return (
           <div 
               ref={containerRef}
-              className="w-full h-[320px] overflow-y-scroll no-scrollbar"
-              onScroll={handleScroll}
+              className="w-full h-[320px] overflow-y-scroll no-scrollbar relative"
+              style={{
+                maskImage: 'linear-gradient(to bottom, transparent 0%, black 25%, black 75%, transparent 100%)',
+                WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 25%, black 75%, transparent 100%)'
+              }}
           >
-              <div style={{ height: range.length * ITEM_HEIGHT }} />
+              {/* 初始占位，等待 ref 被赋值 */}
+              <div style={{ height: placeholderHeight, minHeight: contentHeight }} />
           </div>
       );
   }
   
-  // 计算当前中心位置（在 WheelPicker 容器内的相对位置）
-  // 320px 高度 / 2 = 160px，中心行是 64px 高度。
-  // 容器的中心是 scrollTop + 容器高度的一半。
-  const centerPosition = scrollTop + containerRef.current.offsetHeight / 2;
+  // 2. 只有在 containerRef.current 确定不为空时，才进行计算
+  const containerHeight = containerRef.current.offsetHeight;
+  const topPadding = (containerHeight - ITEM_HEIGHT) / 2;
+  
+  // 滚轮的逻辑中心位置 (scrollTop + 容器顶部到中心的距离)
+  const centerPosition = scrollTop + containerHeight / 2;
+
 
   return (
     <div
@@ -116,22 +138,26 @@ export const WheelPicker: React.FC<WheelPickerProps> = ({ value, min, max, onCha
       }}
     >
       {/* 确保滚轮中间的项目能对齐到容器中心，需要留出上下空间 */}
-      <div style={{ height: (containerRef.current.offsetHeight - ITEM_HEIGHT) / 2 }} />
+      <div style={{ height: topPadding }} />
 
       {range.map((num) => {
-        const itemTop = (num - min) * ITEM_HEIGHT + (containerRef.current!.offsetHeight - ITEM_HEIGHT) / 2;
-        const itemCenter = itemTop + ITEM_HEIGHT / 2;
-        const distance = Math.abs(centerPosition - itemCenter);
+        // itemTop 是项目顶部相对于整个可滚动内容顶部的距离
+        const itemTopRelativeToContent = (num - min) * ITEM_HEIGHT;
+        // itemTopRelativeToContainer: 项目顶部相对于容器顶部的距离 (包括了顶部填充)
+        const itemCenterRelativeToContainer = itemTopRelativeToContent + topPadding + ITEM_HEIGHT / 2;
         
-        // --- 核心样式逻辑修改 ---
-        // 归一化距离：距离中心越近，值越接近 0。ITEM_HEIGHT * 2 是一个合理的衰减距离。
-        const normalizedDistance = Math.min(1, distance / (ITEM_HEIGHT * 2)); 
+        // 距离中心的绝对差值 (使用 itemCenterRelativeToContainer 和 centerPosition 比较)
+        const distance = Math.abs(centerPosition - itemCenterRelativeToContainer);
+        
+        // --- 样式逻辑 ---
+        // 归一化距离：距离中心越近，值越接近 0。
+        const normalizedDistance = Math.min(1, distance / (ITEM_HEIGHT * 2.5)); // 2.5 倍 ITEM_HEIGHT 距离时完全衰减
 
-        // 缩放 (Scale): 距离中心最远时为 0.75，中心时为 1.05 (稍大)
-        const scale = 1.05 - 0.3 * normalizedDistance; // Max 1.05, Min 0.75
+        // 缩放 (Scale): 距离中心最远时为 0.75，中心时为 1.05 
+        const scale = 1.05 - 0.3 * normalizedDistance; 
         
         // 透明度 (Opacity): 距离中心最远时为 0.3，中心时为 1.0
-        const opacity = 1.0 - 0.7 * normalizedDistance; // Max 1.0, Min 0.3
+        const opacity = 1.0 - 0.7 * normalizedDistance; 
         
         const isSelected = distance < ITEM_HEIGHT / 3;
         
@@ -146,7 +172,7 @@ export const WheelPicker: React.FC<WheelPickerProps> = ({ value, min, max, onCha
             }}
           >
             <span className={`font-light tabular-nums leading-none tracking-tight text-white text-6xl ${
-                isSelected ? 'font-medium' : 'font-extralight' // 选中的字体稍微加粗
+                isSelected ? 'font-medium' : 'font-extralight' 
             }`}>
               {num.toString().padStart(2, '0')}
             </span>
@@ -155,7 +181,7 @@ export const WheelPicker: React.FC<WheelPickerProps> = ({ value, min, max, onCha
       })}
 
       {/* 确保滚轮底部有足够的空间 */}
-      <div style={{ height: (containerRef.current.offsetHeight - ITEM_HEIGHT) / 2 }} />
+      <div style={{ height: topPadding }} />
       
       {/* 居中标记线 (居中选框的顶部线和底部线) */}
       <div className="absolute top-1/2 left-0 right-0 h-px bg-white/30 transform -translate-y-[32px] pointer-events-none" />
