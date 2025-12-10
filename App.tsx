@@ -4,7 +4,7 @@ import { CircularTimer } from './components/CircularTimer';
 import { WheelPicker } from './components/WheelPicker';
 import { IconMap, SettingsIcon } from './components/Icons';
 import { AppState, NapMode, SessionStats } from './types';
-import { Play, ChevronUp, Music, X, Upload } from 'lucide-react';
+import { Play, ChevronUp, Music, X, ChevronsUpDown, Upload } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 
@@ -70,6 +70,15 @@ const fileToBase64 = (file: File): Promise<string> =>
     reader.onerror = (error) => reject(error);
   });
 
+// Animated Playing Icon Component
+const PlayingIcon = () => (
+  <div className="flex items-end justify-center gap-[2px] w-3 h-3 mb-[2px]">
+    <div className="w-[2px] bg-current rounded-full animate-sound-wave" style={{ animationDelay: '0s' }}></div>
+    <div className="w-[2px] bg-current rounded-full animate-sound-wave" style={{ animationDelay: '0.1s' }}></div>
+    <div className="w-[2px] bg-current rounded-full animate-sound-wave" style={{ animationDelay: '0.2s' }}></div>
+  </div>
+);
+
 export default function App() {
   const [appState, setAppState] = useState<AppState>(AppState.IDLE);
   const [selectedModeIndex, setSelectedModeIndex] = useState(2); // Default to efficient 24'
@@ -84,6 +93,9 @@ export default function App() {
   const [globalWakeUpMusic, setGlobalWakeUpMusic] = useState<MusicTrack | null>(null);
   const [globalRefreshMusic, setGlobalRefreshMusic] = useState<MusicTrack | null>(null);
   const [modeGuideMusic, setModeGuideMusic] = useState<Record<string, MusicTrack>>({});
+  
+  // Audio Playback State
+  const [playingAudioPath, setPlayingAudioPath] = useState<string | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -169,11 +181,28 @@ export default function App() {
   // --- AUDIO HANDLERS ---
   
   const playAudio = (trackPath: string | undefined) => {
-      if (trackPath && audioRef.current) {
-          const audioSrc = Capacitor.convertFileSrc(trackPath);
-          audioRef.current.src = audioSrc;
-          audioRef.current.play().catch(e => console.error("Error playing audio:", e));
+      if (!audioRef.current) return;
+
+      if (!trackPath) {
+          console.log("No audio track selected");
+          return;
       }
+
+      // If already playing this track, pause it (Toggle)
+      if (playingAudioPath === trackPath) {
+          audioRef.current.pause();
+          setPlayingAudioPath(null);
+          return;
+      }
+
+      const audioSrc = Capacitor.convertFileSrc(trackPath);
+      audioRef.current.src = audioSrc;
+      audioRef.current.play()
+        .then(() => setPlayingAudioPath(trackPath))
+        .catch(e => {
+            console.error("Error playing audio:", e);
+            setPlayingAudioPath(null);
+        });
   };
 
   // --- SETTINGS HANDLERS ---
@@ -251,6 +280,12 @@ export default function App() {
   };
 
   const startTimer = (durationOverride?: number) => {
+    // Stop any preview music when starting timer
+    if (audioRef.current) {
+        audioRef.current.pause();
+        setPlayingAudioPath(null);
+    }
+
     const durationMin = durationOverride !== undefined ? durationOverride : displayDuration;
     const durationSec = durationMin * 60;
     
@@ -462,7 +497,12 @@ export default function App() {
     >
       <Background color={currentMode.themeColor} image={currentMode.bgImage} />
 
-      <audio ref={audioRef} className="hidden" />
+      <audio 
+        ref={audioRef} 
+        className="hidden" 
+        onEnded={() => setPlayingAudioPath(null)}
+        onPause={() => setPlayingAudioPath(null)}
+      />
       <input 
           type="file" 
           ref={fileInputRef} 
@@ -686,9 +726,13 @@ export default function App() {
 
                 <button 
                     onClick={() => playAudio(modeGuideMusic[currentMode.id]?.path)}
-                    className="flex items-center space-x-2 bg-white/10 hover:bg-white/20 backdrop-blur-md px-5 py-2.5 rounded-full text-white/90 transition-all border border-white/10 mb-12"
+                    className="flex items-center space-x-2 bg-white/10 hover:bg-white/20 backdrop-blur-md px-5 py-2.5 rounded-full text-white/90 transition-all border border-white/10 mb-12 h-10"
                 >
-                    <Play className="w-3 h-3 fill-current" />
+                    {playingAudioPath && playingAudioPath === modeGuideMusic[currentMode.id]?.path ? (
+                        <PlayingIcon />
+                    ) : (
+                        <Play className="w-3 h-3 fill-current" />
+                    )}
                     <span className="text-sm">
                         {getMusicStatusText('guide', currentMode.id) 
                             ? <span className="max-w-[200px] truncate inline-block">专属引导: {getMusicStatusText('guide', currentMode.id)}</span>
@@ -879,7 +923,11 @@ export default function App() {
                                 <span className="text-xs text-white/50 max-w-[200px] truncate">{getMusicStatusText('refresh')}</span>
                             )}
                          </div>
-                         <Play className="w-4 h-4 text-white fill-current" />
+                         {playingAudioPath && playingAudioPath === globalRefreshMusic?.path ? (
+                            <PlayingIcon />
+                         ) : (
+                            <Play className="w-4 h-4 text-white fill-current" />
+                         )}
                     </button>
                 </div>
              </div>
