@@ -34,13 +34,17 @@ export const WheelPicker: React.FC<WheelPickerProps> = ({ value, min, max, onCha
   };
 
   return (
-    <div className="relative h-[256px] w-[260px] flex items-center justify-center">
+    <div 
+      className="relative h-[256px] w-[260px] flex items-center justify-center"
+      onTouchStart={(e) => e.stopPropagation()}
+      onTouchMove={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
       
       {/* Selection Lines / Scale Indicators */}
-      {/* These lines frame the selected number, replacing the "circle" but bringing back the "scale" feel */}
       <div className="absolute top-1/2 left-4 right-4 h-[64px] -translate-y-1/2 border-y border-white/20 pointer-events-none" />
 
-      {/* Fixed "Minutes" Label - positioned relative to the center */}
+      {/* Fixed "Minutes" Label */}
       <div className="absolute right-12 top-1/2 -translate-y-1/2 mt-1 z-30 pointer-events-none">
           <span className="text-sm font-medium text-white/50 tracking-widest">分钟</span>
       </div>
@@ -64,7 +68,6 @@ export const WheelPicker: React.FC<WheelPickerProps> = ({ value, min, max, onCha
                 : 'opacity-30 scale-90 blur-[0.5px]'
             }`}
           >
-            {/* Using font-light for a more elegant, thinner look */}
             <span className={`font-light tabular-nums leading-none tracking-tight transition-all duration-300 ${
                 num === value ? 'text-[72px] text-white' : 'text-[60px] text-white'
             }`}>
