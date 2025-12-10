@@ -84,6 +84,12 @@ export default function App() {
   const [selectedModeIndex, setSelectedModeIndex] = useState(2); // Default to efficient 24'
   const [customDuration, setCustomDuration] = useState(30); // Independent state for custom mode
   
+  // 新增：过渡动画状态
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [timerScale, setTimerScale] = useState(1); // 刻度盘放大比例
+  const [uiOpacity, setUiOpacity] = useState(1); // UI元素透明度
+  const [blurAmount, setBlurAmount] = useState(0); // 背景模糊程度
+  
   // Settings State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [painlessWakeUpDuration, setPainlessWakeUpDuration] = useState(10); // Seconds
@@ -109,6 +115,7 @@ export default function App() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<number | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const transitionAnimationRef = useRef<number | null>(null);
   const lastUpdateRef = useRef<number>(Date.now());
   
   // Gesture Refs
@@ -198,8 +205,46 @@ export default function App() {
       }
       if (timerRef.current) clearInterval(timerRef.current);
       if (stopIntervalRef.current) clearInterval(stopIntervalRef.current);
+      if (transitionAnimationRef.current) {
+        cancelAnimationFrame(transitionAnimationRef.current);
+        transitionAnimationRef.current = null;
+      }
     };
   }, [appState, startTime, displayDuration]);
+
+  // 新增：过渡动画效果
+  const startTransitionAnimation = (duration = 800) => {
+    setIsTransitioning(true);
+    
+    let startTime = Date.now();
+    
+    const animate = () => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      
+      // 刻度盘从 1 放大到 1.15
+      setTimerScale(1 + (0.15 * progress));
+      
+      // UI元素从 1 淡出到 0
+      setUiOpacity(1 - progress);
+      
+      // 背景模糊从 0 增加到 20px
+      setBlurAmount(progress * 20);
+      
+      if (progress < 1) {
+        transitionAnimationRef.current = requestAnimationFrame(animate);
+      } else {
+        // 动画完成后开始计时器
+        setIsTransitioning(false);
+        setTimerScale(1);
+        setUiOpacity(1);
+        setBlurAmount(0);
+        startTimerAfterTransition();
+      }
+    };
+    
+    transitionAnimationRef.current = requestAnimationFrame(animate);
+  };
 
   // --- AUDIO HANDLERS ---
   
@@ -303,7 +348,7 @@ export default function App() {
   // --- TIMER HANDLERS ---
 
   const handleModeSelect = (index: number) => {
-    if (appState !== AppState.IDLE) return;
+    if (appState !== AppState.IDLE || isTransitioning) return;
     const newIndex = Math.max(0, Math.min(MODES.length - 1, index));
     setSelectedModeIndex(newIndex);
     
@@ -328,8 +373,8 @@ export default function App() {
     }
   };
 
-  const startTimer = (durationOverride?: number) => {
-    const durationMin = durationOverride !== undefined ? durationOverride : displayDuration;
+  const startTimerAfterTransition = () => {
+    const durationMin = displayDuration;
     const durationSec = durationMin * 60;
     
     setTimeLeft(durationSec);
@@ -355,6 +400,11 @@ export default function App() {
     setAppState(AppState.RUNNING);
   };
 
+  const startTimer = () => {
+    if (isTransitioning || appState !== AppState.IDLE) return;
+    startTransitionAnimation();
+  };
+
   const stopTimer = () => {
     if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
@@ -365,7 +415,15 @@ export default function App() {
         clearInterval(stopIntervalRef.current);
         stopIntervalRef.current = null;
     }
+    if (transitionAnimationRef.current) {
+        cancelAnimationFrame(transitionAnimationRef.current);
+        transitionAnimationRef.current = null;
+    }
     setAppState(AppState.IDLE);
+    setIsTransitioning(false);
+    setTimerScale(1);
+    setUiOpacity(1);
+    setBlurAmount(0);
     setSlideY(0);
     setStopProgress(0);
     setSessionStats(null);
@@ -391,13 +449,13 @@ export default function App() {
   };
 
   const handleSnooze = () => {
-      startTimer(snoozeDuration);
+      startTimerAfterTransition();
       setSlideY(0);
   };
 
   // --- GESTURE HANDLERS ---
   const handleStopPressStart = () => {
-    if (stopIntervalRef.current) return;
+    if (stopIntervalRef.current || isTransitioning) return;
     const startTime = Date.now();
     const DURATION = 3000; // 3 seconds
 
@@ -421,18 +479,18 @@ export default function App() {
   };
   
   const handleTouchStart = (e: React.TouchEvent) => {
-    if (appState !== AppState.IDLE) return;
+    if (appState !== AppState.IDLE || isTransitioning) return;
     touchStartX.current = e.targetTouches[0].clientX;
     touchEndX.current = e.targetTouches[0].clientX;
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (appState !== AppState.IDLE || touchStartX.current === null) return;
+    if (appState !== AppState.IDLE || isTransitioning || touchStartX.current === null) return;
     touchEndX.current = e.targetTouches[0].clientX;
   };
 
   const handleTouchEnd = () => {
-    if (appState !== AppState.IDLE || touchStartX.current === null || touchEndX.current === null) return;
+    if (appState !== AppState.IDLE || isTransitioning || touchStartX.current === null || touchEndX.current === null) return;
     
     const diff = touchStartX.current - touchEndX.current;
     const SWIPE_THRESHOLD = 50;
@@ -449,13 +507,13 @@ export default function App() {
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (appState !== AppState.IDLE) return;
+    if (appState !== AppState.IDLE || isTransitioning) return;
     touchStartX.current = e.clientX;
     isDragging.current = true;
   };
 
   const handleMouseUp = (e: React.MouseEvent) => {
-    if (appState !== AppState.IDLE || !isDragging.current || touchStartX.current === null) {
+    if (appState !== AppState.IDLE || isTransitioning || !isDragging.current || touchStartX.current === null) {
       isDragging.current = false;
       return;
     }
@@ -488,7 +546,7 @@ export default function App() {
   };
 
   const handleAlarmTouchMove = (e: React.TouchEvent) => {
-    if (appState !== AppState.ALARM) return;
+    if (appState !== AppState.ALARM || isTransitioning) return;
     const touch = e.touches[0];
     const screenH = window.innerHeight;
     const y = touch.clientY;
@@ -509,12 +567,12 @@ export default function App() {
   };
 
   const handleAlarmMouseDown = (e: React.MouseEvent) => {
-      if (appState !== AppState.ALARM) return;
+      if (appState !== AppState.ALARM || isTransitioning) return;
       dragStartY.current = e.clientY;
   };
 
   const handleAlarmMouseMove = (e: React.MouseEvent) => {
-      if (appState !== AppState.ALARM || dragStartY.current === null) return;
+      if (appState !== AppState.ALARM || isTransitioning || dragStartY.current === null) return;
       
       const screenH = window.innerHeight;
       const y = e.clientY;
@@ -529,7 +587,7 @@ export default function App() {
   };
 
   const handleAlarmMouseUp = () => {
-      if (appState !== AppState.ALARM) return;
+      if (appState !== AppState.ALARM || isTransitioning) return;
       dragStartY.current = null;
       if (slideY < 200) {
           setSlideY(0);
@@ -547,6 +605,12 @@ export default function App() {
   const { m, s } = formatTime(timeLeft);
   const StartIcon = IconMap[currentMode.iconType];
 
+  // 计算IDLE状态下显示的刻度盘大小（带缩放）
+  const idleTimerSize = currentMode.id === 'custom' ? 260 : 230;
+  const runningTimerSize = 250;
+  const displayedTimerSize = isTransitioning ? idleTimerSize * timerScale : 
+                              appState === AppState.IDLE ? idleTimerSize : runningTimerSize;
+
   return (
     <div 
         className="relative w-full h-full overflow-hidden font-light" 
@@ -558,6 +622,17 @@ export default function App() {
         onMouseLeave={handleAlarmMouseUp}
     >
       <Background color={currentMode.themeColor} image={currentMode.bgImage} />
+      
+      {/* 背景模糊层 */}
+      {blurAmount > 0 && (
+        <div 
+          className="absolute inset-0 z-10 transition-all duration-300"
+          style={{ 
+            backdropFilter: `blur(${blurAmount}px)`,
+            WebkitBackdropFilter: `blur(${blurAmount}px)`,
+          }}
+        />
+      )}
 
       <audio 
         ref={audioRef} 
@@ -706,18 +781,27 @@ export default function App() {
 
       {appState === AppState.IDLE && (
         <div className="flex flex-col h-full animate-fade-in relative z-10">
-            <div className="pt-12 px-6 flex justify-between items-center text-white/80 relative z-40">
+            {/* 顶部栏 - 带渐隐效果 */}
+            <div 
+              className="pt-12 px-6 flex justify-between items-center text-white/80 relative z-40 transition-all duration-500"
+              style={{ opacity: uiOpacity }}
+            >
                 <div className="w-6 h-6" />
                 <div className="text-lg tracking-wide font-medium">小憩</div>
                 <button 
                     onClick={() => setIsSettingsOpen(true)}
                     className="p-1 rounded-full active:bg-white/10 transition-colors"
+                    disabled={isTransitioning}
                 >
                     <SettingsIcon />
                 </button>
             </div>
 
-            <div className="relative z-30">
+            {/* 模式选择 - 带渐隐效果 */}
+            <div 
+              className="relative z-30 transition-all duration-500"
+              style={{ opacity: uiOpacity }}
+            >
                 <div 
                     ref={scrollContainerRef}
                     className="mt-8 flex overflow-x-auto space-x-2 px-4 pb-4 no-scrollbar snap-x snap-mandatory"
@@ -731,6 +815,7 @@ export default function App() {
                                 whitespace-nowrap px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 snap-center
                                 ${idx === selectedModeIndex ? 'bg-white/20 text-white backdrop-blur-md border border-white/30' : 'text-white/50 hover:text-white/80'}
                             `}
+                            disabled={isTransitioning}
                         >
                             {mode.name}
                         </button>
@@ -750,20 +835,33 @@ export default function App() {
             >
                 <div className="relative flex items-center justify-center min-h-[260px]">
                     {currentMode.id !== 'custom' && (
-                        <CircularTimer progress={0} size={230} showTicks={true} color="transparent" />
+                        <div 
+                          className="transition-all duration-500 ease-out"
+                          style={{ transform: `scale(${timerScale})` }}
+                        >
+                          <CircularTimer progress={0} size={displayedTimerSize} showTicks={true} color="transparent" />
+                        </div>
                     )}
                     
                     <div className={`${currentMode.id === 'custom' ? 'relative' : 'absolute inset-0'} flex flex-col items-center justify-center pointer-events-auto`}>
                         
                         {currentMode.id === 'custom' ? (
-                            <WheelPicker 
-                                value={customDuration}
-                                min={1}
-                                max={180}
-                                onChange={setCustomDuration}
-                            />
+                            <div 
+                              className="transition-all duration-500 ease-out"
+                              style={{ transform: `scale(${timerScale})` }}
+                            >
+                              <WheelPicker 
+                                  value={customDuration}
+                                  min={1}
+                                  max={180}
+                                  onChange={setCustomDuration}
+                              />
+                            </div>
                         ) : (
-                            <div className="flex flex-col items-center justify-center select-none">
+                            <div 
+                              className="flex flex-col items-center justify-center select-none transition-all duration-500 ease-out"
+                              style={{ transform: `scale(${timerScale})` }}
+                            >
                                 <div className="text-[72px] leading-none font-thin text-white tracking-tighter tabular-nums drop-shadow-lg flex items-center">
                                     {displayDuration}
                                 </div>
@@ -780,7 +878,11 @@ export default function App() {
 
             </div>
 
-            <div className="pb-16 flex flex-col items-center justify-center w-full relative z-20">
+            {/* 底部控制区域 - 带渐隐效果 */}
+            <div 
+              className="pb-16 flex flex-col items-center justify-center w-full relative z-20 transition-all duration-500"
+              style={{ opacity: uiOpacity }}
+            >
                 
                 <div className="text-white/70 text-sm font-light mb-8 transition-opacity">
                     将在 {getWakeUpTimeString()} 唤醒你
@@ -789,6 +891,7 @@ export default function App() {
                 <button 
                     onClick={() => playAudio(modeGuideMusic[currentMode.id]?.path)}
                     className="flex items-center space-x-2 bg-white/10 hover:bg-white/20 backdrop-blur-md px-5 py-2.5 rounded-full text-white/90 transition-all border border-white/10 mb-12 h-10"
+                    disabled={isTransitioning}
                 >
                     {playingAudioPath && playingAudioPath === modeGuideMusic[currentMode.id]?.path ? (
                         <PlayingIcon />
@@ -807,9 +910,14 @@ export default function App() {
                      <div className="w-6 h-6" />
 
                      <button 
-                        onClick={() => startTimer()}
-                        className="w-20 h-20 bg-white rounded-full flex items-center justify-center transition-transform active:scale-95 group relative"
-                        style={{ boxShadow: `0 0 40px ${currentMode.themeColor}50` }}
+                        onClick={startTimer}
+                        className="w-20 h-20 bg-white rounded-full flex items-center justify-center transition-all duration-300 active:scale-95 group relative hover:scale-105"
+                        style={{ 
+                          boxShadow: `0 0 40px ${currentMode.themeColor}50`,
+                          opacity: uiOpacity,
+                          transform: `scale(${isTransitioning ? 0.8 : 1})`
+                        }}
+                        disabled={isTransitioning}
                      >
                         <StartIcon 
                             className="w-8 h-8 transition-colors duration-300"
@@ -881,6 +989,7 @@ export default function App() {
                         onTouchStart={handleStopPressStart}
                         onTouchEnd={handleStopPressEnd}
                         className="w-16 h-16 rounded-full border border-white/30 flex items-center justify-center text-white/80 backdrop-blur-md active:bg-white/10 transition-colors z-10"
+                        disabled={isTransitioning}
                     >
                         <div className="w-3 h-3 bg-white rounded-[1px]" />
                     </button>
