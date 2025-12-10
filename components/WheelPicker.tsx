@@ -1,5 +1,4 @@
-
-import React, { useRef, useEffect, UIEvent } from 'react';
+import React, { useRef, useEffect, UIEvent, useState } from 'react';
 
 interface WheelPickerProps {
   value: number;
@@ -11,6 +10,7 @@ interface WheelPickerProps {
 export const WheelPicker: React.FC<WheelPickerProps> = ({ value, min, max, onChange }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const isScrolling = useRef<number | null>(null);
+  const [currentScrollTop, setCurrentScrollTop] = useState(0);
   const ITEM_HEIGHT = 64; 
 
   // Generate the range of numbers
@@ -22,16 +22,20 @@ export const WheelPicker: React.FC<WheelPickerProps> = ({ value, min, max, onCha
       const index = value - min;
       const targetScrollTop = index * ITEM_HEIGHT;
       // Only set scroll position if it's not already there, to avoid conflicts with user scrolling
-      if (containerRef.current.scrollTop !== targetScrollTop) {
+      if (Math.abs(containerRef.current.scrollTop - targetScrollTop) > 1) {
         containerRef.current.scrollTop = targetScrollTop;
+        setCurrentScrollTop(targetScrollTop);
       }
     }
-  }, [value, min]);
+  }, [value, min, max]);
 
   const handleScrollEnd = () => {
     if (!containerRef.current) return;
     
     const scrollTop = containerRef.current.scrollTop;
+    setCurrentScrollTop(scrollTop);
+    
+    // 修复：使用 Math.round 确保选择正确的项目
     const index = Math.round(scrollTop / ITEM_HEIGHT);
     const newValue = Math.max(min, Math.min(max, min + index));
 
@@ -50,6 +54,11 @@ export const WheelPicker: React.FC<WheelPickerProps> = ({ value, min, max, onCha
 
   const onScroll = (e: UIEvent<HTMLDivElement>) => {
     e.stopPropagation(); // Prevent parent swipe gestures
+    if (!containerRef.current) return;
+    
+    const scrollTop = containerRef.current.scrollTop;
+    setCurrentScrollTop(scrollTop);
+    
     if (isScrolling.current) {
       clearTimeout(isScrolling.current);
     }
@@ -85,12 +94,16 @@ export const WheelPicker: React.FC<WheelPickerProps> = ({ value, min, max, onCha
         }}
       >
         {range.map((num) => {
-          // Calculate distance from center for dynamic styling
-          const center = (containerRef.current?.scrollTop || 0) + ITEM_HEIGHT * 1.5;
+          // 修复：使用当前的 scrollTop 来计算距离，而不是 scrollTop + ITEM_HEIGHT * 1.5
+          const center = currentScrollTop + (ITEM_HEIGHT * 1); // 改为 *1，因为中心点是第一行
           const itemTop = (num - min) * ITEM_HEIGHT;
-          const distance = Math.abs(center - (itemTop + ITEM_HEIGHT / 2));
-          const scale = Math.max(0.8, 1 - distance / (ITEM_HEIGHT * 3));
-          const opacity = Math.max(0.3, 1 - distance / (ITEM_HEIGHT * 3));
+          const itemCenter = itemTop + (ITEM_HEIGHT / 2);
+          const distance = Math.abs(center - itemCenter);
+          const scale = Math.max(0.8, 1 - distance / (ITEM_HEIGHT * 2)); // 调整计算参数
+          const opacity = Math.max(0.3, 1 - distance / (ITEM_HEIGHT * 2));
+          
+          // 判断是否选中（距离小于阈值）
+          const isSelected = distance < ITEM_HEIGHT / 2;
           
           return (
             <div 
@@ -103,7 +116,7 @@ export const WheelPicker: React.FC<WheelPickerProps> = ({ value, min, max, onCha
               }}
             >
               <span className={`font-light tabular-nums leading-none tracking-tight text-white ${
-                  num === value ? 'text-[72px]' : 'text-[60px]'
+                  isSelected ? 'text-[72px]' : 'text-[60px]'
               }`}>
                   {num}
               </span>
