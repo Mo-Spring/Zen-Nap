@@ -23,9 +23,9 @@ export const WheelPicker: React.FC<WheelPickerProps> = ({ value, min, max, onCha
       const index = value - min;
       const targetScrollTop = index * ITEM_HEIGHT;
       
-      // 首次渲染后，将滚动位置设置为正确的初始值
-      // 修正: 加上额外的顶部填充高度，以使值居中
+      // 获取上下填充空间
       const topPadding = (containerRef.current.offsetHeight - ITEM_HEIGHT) / 2;
+      // 计算最终需要滚动的顶部位置
       const finalScrollTop = targetScrollTop - topPadding;
       
       if (Math.abs(containerRef.current.scrollTop - finalScrollTop) > 1) {
@@ -78,7 +78,7 @@ export const WheelPicker: React.FC<WheelPickerProps> = ({ value, min, max, onCha
     isScrolling.current = window.setTimeout(() => {
       isScrolling.current = null;
       handleScrollEnd();
-    }, 150); 
+    }, 150) as unknown as number; 
     
     setScrollTop(e.currentTarget.scrollTop);
   };
@@ -94,8 +94,6 @@ export const WheelPicker: React.FC<WheelPickerProps> = ({ value, min, max, onCha
 
   // 1. 初始渲染时 containerRef.current 为 null，必须先返回
   if (!containerRef.current) {
-      // 渲染一个占位符或包含滚轮容器但没有内部 item 的版本，避免访问 offsetHeight
-      // 这里的 height 320px 必须与容器的 h-[320px] 匹配
       const contentHeight = range.length * ITEM_HEIGHT;
       const placeholderHeight = 320;
       
@@ -129,8 +127,9 @@ export const WheelPicker: React.FC<WheelPickerProps> = ({ value, min, max, onCha
       onScroll={handleScroll}
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
-      onMouseDown={onTouchStart}
-      onMouseUp={onTouchEnd}
+      // 移除 onMouseDown, onMouseUp
+      // onMouseDown={onTouchStart}
+      // onMouseUp={onTouchEnd}
       // 添加遮罩以实现滚轮两端渐隐效果
       style={{
         maskImage: 'linear-gradient(to bottom, transparent 0%, black 25%, black 75%, transparent 100%)',
@@ -141,9 +140,9 @@ export const WheelPicker: React.FC<WheelPickerProps> = ({ value, min, max, onCha
       <div style={{ height: topPadding }} />
 
       {range.map((num) => {
-        // itemTop 是项目顶部相对于整个可滚动内容顶部的距离
+        // itemTopRelativeToContent: 项目顶部相对于整个可滚动内容顶部的距离
         const itemTopRelativeToContent = (num - min) * ITEM_HEIGHT;
-        // itemTopRelativeToContainer: 项目顶部相对于容器顶部的距离 (包括了顶部填充)
+        // itemCenterRelativeToContainer: 项目中心相对于容器顶部的距离 (包括了顶部填充)
         const itemCenterRelativeToContainer = itemTopRelativeToContent + topPadding + ITEM_HEIGHT / 2;
         
         // 距离中心的绝对差值 (使用 itemCenterRelativeToContainer 和 centerPosition 比较)
