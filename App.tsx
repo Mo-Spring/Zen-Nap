@@ -5,7 +5,7 @@ import { CircularTimer } from './components/CircularTimer';
 import { WheelPicker } from './components/WheelPicker';
 import { IconMap, SettingsIcon } from './components/Icons';
 import { AppState, NapMode, SessionStats } from './types';
-import { Play, ChevronUp, Music, X, ChevronsUpDown, Upload } from 'lucide-react';
+import { Play, ChevronUp, Music, X, Upload } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 
