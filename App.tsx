@@ -84,7 +84,7 @@ export default function App() {
   const [selectedModeIndex, setSelectedModeIndex] = useState(2);
   const [customDuration, setCustomDuration] = useState(30);
   
-  // 动画状态 - 简化版，参考iOS设计
+  // 动画状态
   const [isAnimating, setIsAnimating] = useState(false);
   const [animationProgress, setAnimationProgress] = useState(0);
 
@@ -107,11 +107,30 @@ export default function App() {
   const [startTime, setStartTime] = useState<Date | null>(null);
   const [sessionStats, setSessionStats] = useState<SessionStats | null>(null);
   
+  // 新增：修复缺失的状态变量
+  const [activeUploadContext, setActiveUploadContext] = useState<{
+      field: 'wakeUp' | 'refresh' | 'guide';
+      modeId?: string;
+  } | null>(null);
+  
+  // Gesture State
+  const [slideY, setSlideY] = useState(0);
+  
+  // Long Press to Stop State
+  const [stopProgress, setStopProgress] = useState(0);
+  
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const stopIntervalRef = useRef<number | null>(null);
+  
+  // Gesture Refs
+  const dragStartY = useRef<number | null>(null);
+  const touchStartX = useRef<number | null>(null);
+  const touchEndX = useRef<number | null>(null);
+  const isDragging = useRef(false);
   
   const currentMode = MODES[selectedModeIndex];
   const displayDuration = currentMode.id === 'custom' ? customDuration : currentMode.durationMinutes;
@@ -145,7 +164,7 @@ export default function App() {
     localStorage.setItem('zenNapSettings', JSON.stringify(settings));
   }, [globalWakeUpMusic, globalRefreshMusic, modeGuideMusic]);
 
-  // 修复的计时器逻辑
+  // 计时器逻辑
   useEffect(() => {
     if (appState === AppState.RUNNING && startTime && timeLeft > 0) {
       const updateTimer = () => {
@@ -179,7 +198,7 @@ export default function App() {
     };
   }, [appState, startTime, displayDuration]);
 
-  // 动画效果 - iOS风格渐入渐出
+  // 动画效果
   useEffect(() => {
     if (isAnimating) {
       const duration = 500;
@@ -189,7 +208,6 @@ export default function App() {
         const elapsed = Date.now() - startTime;
         const progress = Math.min(elapsed / duration, 1);
         
-        // iOS风格的缓动函数
         const easeOutCubic = 1 - Math.pow(1 - progress, 3);
         setAnimationProgress(easeOutCubic);
         
@@ -363,6 +381,10 @@ export default function App() {
         cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
     }
+    if (stopIntervalRef.current) {
+        clearInterval(stopIntervalRef.current);
+        stopIntervalRef.current = null;
+    }
     setIsAnimating(false);
     setAnimationProgress(0);
     setAppState(AppState.IDLE);
@@ -395,6 +417,148 @@ export default function App() {
     setSlideY(0);
   };
 
+  // --- GESTURE HANDLERS ---
+  const handleStopPressStart = () => {
+    if (stopIntervalRef.current || isAnimating) return;
+    const startTime = Date.now();
+    const DURATION = 3000; // 3 seconds
+
+    stopIntervalRef.current = window.setInterval(() => {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / DURATION, 1);
+        setStopProgress(progress);
+
+        if (progress >= 1) {
+            stopTimer();
+        }
+    }, 16);
+  };
+
+  const handleStopPressEnd = () => {
+    if (stopIntervalRef.current) {
+        clearInterval(stopIntervalRef.current);
+        stopIntervalRef.current = null;
+    }
+    setStopProgress(0);
+  };
+  
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (appState !== AppState.IDLE || isAnimating) return;
+    touchStartX.current = e.targetTouches[0].clientX;
+    touchEndX.current = e.targetTouches[0].clientX;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (appState !== AppState.IDLE || isAnimating || touchStartX.current === null) return;
+    touchEndX.current = e.targetTouches[0].clientX;
+  };
+
+  const handleTouchEnd = () => {
+    if (appState !== AppState.IDLE || isAnimating || touchStartX.current === null || touchEndX.current === null) return;
+    
+    const diff = touchStartX.current - touchEndX.current;
+    const SWIPE_THRESHOLD = 50;
+
+    if (Math.abs(diff) > SWIPE_THRESHOLD) {
+      if (diff > 0) { // Swiped left
+        handleModeSelect(selectedModeIndex + 1);
+      } else { // Swiped right
+        handleModeSelect(selectedModeIndex - 1);
+      }
+    }
+    touchStartX.current = null;
+    touchEndX.current = null;
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (appState !== AppState.IDLE || isAnimating) return;
+    touchStartX.current = e.clientX;
+    isDragging.current = true;
+  };
+
+  const handleMouseUp = (e: React.MouseEvent) => {
+    if (appState !== AppState.IDLE || isAnimating || !isDragging.current || touchStartX.current === null) {
+      isDragging.current = false;
+      return;
+    }
+    isDragging.current = false;
+    touchEndX.current = e.clientX;
+    
+    const diff = touchStartX.current - touchEndX.current;
+    const SWIPE_THRESHOLD = 50;
+
+    if (Math.abs(diff) > SWIPE_THRESHOLD) {
+      if (diff > 0) { // Swiped left
+        handleModeSelect(selectedModeIndex + 1);
+      } else { // Swiped right
+        handleModeSelect(selectedModeIndex - 1);
+      }
+    }
+    touchStartX.current = null;
+    touchEndX.current = null;
+  };
+  
+  const handleMouseLeave = (e: React.MouseEvent) => {
+    if (isDragging.current) {
+      handleMouseUp(e);
+    }
+  };
+
+  // 闹钟页面手势处理
+  const handleAlarmTouchStart = (e: React.TouchEvent) => {
+    if (appState !== AppState.ALARM) return;
+    dragStartY.current = e.touches[0].clientY;
+  };
+
+  const handleAlarmTouchMove = (e: React.TouchEvent) => {
+    if (appState !== AppState.ALARM || dragStartY.current === null) return;
+    const touch = e.touches[0];
+    const screenH = window.innerHeight;
+    const y = touch.clientY;
+    
+    const delta = screenH - y;
+    
+    if (delta > 200) {
+        completeSession();
+    }
+    
+    setSlideY(Math.min(delta, 250));
+  };
+
+  const handleAlarmTouchEnd = () => {
+    if (appState === AppState.ALARM && slideY < 200) {
+        setSlideY(0);
+    }
+  };
+
+  const handleAlarmMouseDown = (e: React.MouseEvent) => {
+      if (appState !== AppState.ALARM) return;
+      dragStartY.current = e.clientY;
+  };
+
+  const handleAlarmMouseMove = (e: React.MouseEvent) => {
+      if (appState !== AppState.ALARM || dragStartY.current === null) return;
+      
+      const screenH = window.innerHeight;
+      const y = e.clientY;
+      
+      const delta = screenH - y;
+      
+      if (delta > 200) {
+          completeSession();
+          dragStartY.current = null;
+      }
+      setSlideY(Math.min(delta, 250));
+  };
+
+  const handleAlarmMouseUp = () => {
+      if (appState !== AppState.ALARM) return;
+      dragStartY.current = null;
+      if (slideY < 200) {
+          setSlideY(0);
+      }
+  };
+
   // 获取唤醒时间字符串
   const getWakeUpTimeString = () => {
     const target = endTime || new Date(new Date().getTime() + displayDuration * 60000);
@@ -421,7 +585,14 @@ export default function App() {
   const blurAmount = animationProgress * 10;
 
   return (
-    <div className="relative w-full h-full overflow-hidden font-light">
+    <div 
+      className="relative w-full h-full overflow-hidden font-light"
+      onTouchMove={handleAlarmTouchMove} 
+      onTouchEnd={handleAlarmTouchEnd}
+      onMouseDown={handleAlarmMouseDown}
+      onMouseMove={handleAlarmMouseMove}
+      onMouseUp={handleAlarmMouseUp}
+    >
       <Background color={currentMode.themeColor} image={currentMode.bgImage} />
       
       {/* 背景模糊层 */}
@@ -623,7 +794,15 @@ export default function App() {
             </div>
 
             {/* 主内容区域 */}
-            <div className="flex-1 flex flex-col items-center justify-center">
+            <div 
+              className="flex-1 flex flex-col items-center justify-center"
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              onMouseDown={handleMouseDown}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseLeave}
+            >
                 <div className="relative flex items-center justify-center min-h-[260px]">
                     {currentMode.id !== 'custom' && (
                         <div 
