@@ -68,3 +68,22 @@
 .fade-out-up {
   animation: fade-out-up 0.5s ease-out forwards;
 }
+
+/* src/index.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* iOS-style elastic easing */
+.ios-ease-out {
+  transition-timing-function: cubic-bezier(0.32, 0.76, 0, 1) !important;
+}
+
+/* 隐藏滚动条 */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
