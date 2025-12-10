@@ -1,3 +1,5 @@
+[file name]: WheelPicker.tsx
+[file content begin]
 import React, { useRef, useEffect, UIEvent, useState } from 'react';
 
 interface WheelPickerProps {
@@ -13,6 +15,8 @@ export const WheelPicker: React.FC<WheelPickerProps> = ({ value, min, max, onCha
   const [isDragging, setIsDragging] = useState(false);
   const [scrollTop, setScrollTop] = useState(0);
   const ITEM_HEIGHT = 64; 
+  const CONTAINER_HEIGHT = 256; // 容器高度
+  const VISIBLE_ITEMS = 5; // 可见项目数（中间1个+上下各2个）
 
   // Generate the range of numbers
   const range = Array.from({ length: max - min + 1 }, (_, i) => i + min);
@@ -34,12 +38,12 @@ export const WheelPicker: React.FC<WheelPickerProps> = ({ value, min, max, onCha
     
     const scrollTop = containerRef.current.scrollTop;
     
-    // 修复：使用 Math.round 确保选择正确的项目，但要考虑惯性滚动
+    // 更精确的滚动结束处理
     const rawIndex = scrollTop / ITEM_HEIGHT;
     const index = Math.round(rawIndex);
     const newValue = Math.max(min, Math.min(max, min + index));
 
-    // 修复：只有在值改变时才更新和滚动
+    // 只有在值改变时才更新
     if (newValue !== value) {
       const targetScrollTop = index * ITEM_HEIGHT;
       
@@ -87,8 +91,8 @@ export const WheelPicker: React.FC<WheelPickerProps> = ({ value, min, max, onCha
 
   const stopPropagation = (e: React.SyntheticEvent) => e.stopPropagation();
 
-  // 计算中心位置（修正了之前的错误）
-  const centerPosition = scrollTop + ITEM_HEIGHT * 2; // 容器高度的一半
+  // 计算中心位置（容器的中间）
+  const centerPosition = CONTAINER_HEIGHT / 2;
 
   return (
     <div 
@@ -98,12 +102,16 @@ export const WheelPicker: React.FC<WheelPickerProps> = ({ value, min, max, onCha
       onMouseDown={stopPropagation}
     >
       
-      {/* Selection Lines / Scale Indicators */}
-      <div className="absolute top-1/2 left-4 right-4 h-[64px] -translate-y-1/2 border-y border-white/20 pointer-events-none z-20" />
+      {/* 中心选择指示器 - 更明显的样式 */}
+      <div className="absolute top-1/2 left-2 right-14 h-[64px] -translate-y-1/2 
+                      border-t-2 border-b-2 border-white/40 pointer-events-none z-20">
+        {/* 中心高亮背景 */}
+        <div className="absolute inset-0 bg-white/10 rounded-lg" />
+      </div>
 
       {/* Fixed "Minutes" Label */}
-      <div className="absolute right-12 top-1/2 -translate-y-1/2 mt-1 z-30 pointer-events-none">
-          <span className="text-sm font-medium text-white/50 tracking-widest">分钟</span>
+      <div className="absolute right-14 top-1/2 -translate-y-1/2 mt-1 z-30 pointer-events-none">
+          <span className="text-sm font-medium text-white/70 tracking-widest">分钟</span>
       </div>
 
       {/* Scrollable Container with Mask for Fade Effect */}
@@ -116,8 +124,8 @@ export const WheelPicker: React.FC<WheelPickerProps> = ({ value, min, max, onCha
         onMouseDown={onTouchStart}
         onMouseUp={onTouchEnd}
         style={{
-          maskImage: 'linear-gradient(to bottom, transparent 0%, black 25%, black 75%, transparent 100%)',
-          WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 25%, black 75%, transparent 100%)'
+          maskImage: 'linear-gradient(to bottom, transparent 0%, black 20%, black 80%, transparent 100%)',
+          WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 20%, black 80%, transparent 100%)'
         }}
       >
         {range.map((num) => {
@@ -125,31 +133,45 @@ export const WheelPicker: React.FC<WheelPickerProps> = ({ value, min, max, onCha
           const itemCenter = itemTop + ITEM_HEIGHT / 2;
           const distance = Math.abs(centerPosition - itemCenter);
           
-          // 更精确的计算，避免跳跃
-          const scale = 0.8 + 0.4 * Math.max(0, 1 - distance / (ITEM_HEIGHT * 1.5));
-          const opacity = 0.3 + 0.7 * Math.max(0, 1 - distance / (ITEM_HEIGHT * 1.5));
+          // 更精确的距离计算（以像素为单位）
+          const normalizedDistance = Math.min(distance / ITEM_HEIGHT, 1);
           
-          const isSelected = distance < ITEM_HEIGHT / 3;
+          // 缩放比例：中心最大，越远越小
+          const scale = 1 - 0.3 * normalizedDistance;
           
+          // 透明度：中心最亮，越远越暗
+          const opacity = 1 - 0.7 * normalizedDistance;
+          
+          // 字体大小：中心最大
+          const fontSize = 72 - 24 * normalizedDistance;
+          
+          // 字体粗细：中心最粗
+          const fontWeight = normalizedDistance < 0.1 ? 'font-medium' : 'font-light';
+          
+          const isSelected = distance < ITEM_HEIGHT / 2;
+
           return (
             <div 
               key={num} 
-              className="h-[64px] flex items-center justify-center select-none"
+              className="h-[64px] flex items-center justify-center select-none transition-all duration-100"
               style={{
                 transform: `scale(${scale})`,
                 opacity: opacity,
-                transition: isDragging ? 'none' : 'transform 150ms ease, opacity 150ms ease'
               }}
             >
-              <span className={`font-light tabular-nums leading-none tracking-tight text-white ${
-                  isSelected ? 'text-[72px]' : 'text-[60px]'
-              }`}>
+              <span className={`tabular-nums leading-none text-white ${fontWeight} transition-all duration-100`}
+                    style={{ fontSize: `${fontSize}px` }}>
                   {num}
               </span>
             </div>
           );
         })}
       </div>
+      
+      {/* 上下渐变遮罩，增强滚轮效果 */}
+      <div className="absolute top-0 left-0 right-0 h-24 bg-gradient-to-b from-black/80 to-transparent pointer-events-none z-10" />
+      <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-black/80 to-transparent pointer-events-none z-10" />
     </div>
   );
 };
+[file content end]
