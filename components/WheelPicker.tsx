@@ -114,11 +114,11 @@ export const WheelPicker: React.FC<WheelPickerProps> = ({ value, min, max, onCha
       if (span) {
           if (Math.abs(theta) < 0.2) { // 接近中心
               span.style.color = '#ffffff';
-              span.style.fontWeight = '400';
+              span.style.fontWeight = '300';
               // span.style.filter = 'drop-shadow(0 2px 8px rgba(255,255,255,0.3))'; // 可选：发光效果
           } else {
               span.style.color = 'rgba(255,255,255,0.5)';
-              span.style.fontWeight = '300';
+              span.style.fontWeight = '200';
               // span.style.filter = 'none';
           }
       }
