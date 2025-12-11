@@ -1,4 +1,3 @@
-
 import React, { useRef, useEffect, useState } from 'react';
 
 interface WheelPickerProps {
@@ -15,7 +14,7 @@ export const WheelPicker: React.FC<WheelPickerProps> = ({ value, min, max, onCha
   // 配置参数
   const ITEM_HEIGHT = 60; // 单个数字高度
   const CONTAINER_HEIGHT = 300; // 容器总高度
-  const VISIBLE_ITEMS = 5; // 可视区域显示的数字数量
+  // VISIBLE_ITEMS removed as it was unused and causing build errors
   
   // 生成数字范围
   const range = Array.from({ length: max - min + 1 }, (_, i) => i + min);
