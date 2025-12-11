@@ -8,6 +8,7 @@ import { Play, ChevronUp, Music, X, Upload } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { StatusBar, Style } from '@capacitor/status-bar';
+import { LocalNotifications } from '@capacitor/local-notifications';
 
 // --- DATA ---
 const MODES: NapMode[] = [
@@ -161,6 +162,9 @@ export default function App() {
             }
         };
         initStatusBar();
+        
+        // Request Notification Permissions
+        LocalNotifications.requestPermissions();
     }
   }, []);
 
@@ -372,7 +376,7 @@ export default function App() {
     }
   };
 
-  const startTimerInternal = (durationMinutes: number) => {
+  const startTimerInternal = async (durationMinutes: number) => {
     setActiveDuration(durationMinutes); // 设置当前激活的时长
     const durationSec = durationMinutes * 60;
     
@@ -397,6 +401,29 @@ export default function App() {
     }
     
     setAppState(AppState.RUNNING);
+
+    // Schedule Local Notification for background/lock screen alarm
+    if (Capacitor.isNativePlatform()) {
+        try {
+            // Cancel any pending notifications first to be safe
+            await LocalNotifications.cancel({ notifications: [{ id: 1 }] });
+            
+            // Schedule new notification
+            await LocalNotifications.schedule({
+                notifications: [{
+                    title: "小憩结束",
+                    body: "时间到了，该起床了",
+                    id: 1,
+                    schedule: { at: end },
+                    sound: undefined, // Uses default system sound
+                    actionTypeId: "",
+                    extra: null
+                }]
+            });
+        } catch (e) {
+            console.error("Failed to schedule notification", e);
+        }
+    }
   };
 
   const startTimer = () => {
@@ -410,7 +437,7 @@ export default function App() {
     }, 700); // Reverted to 700ms to match the snappier CSS transition
   };
 
-  const stopTimer = () => {
+  const stopTimer = async () => {
     if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
@@ -418,6 +445,15 @@ export default function App() {
     if (stopIntervalRef.current) {
         cancelAnimationFrame(stopIntervalRef.current);
         stopIntervalRef.current = null;
+    }
+
+    // Cancel Notification
+    if (Capacitor.isNativePlatform()) {
+        try {
+            await LocalNotifications.cancel({ notifications: [{ id: 1 }] });
+        } catch (e) {
+            console.error("Failed to cancel notification", e);
+        }
     }
 
     // Reset progress to prevent "full bar" on next render
@@ -445,11 +481,21 @@ export default function App() {
     });
   };
 
-  const finishTimer = () => {
+  const finishTimer = async () => {
     if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
     }
+
+    // Cancel Notification (if user has app open, we don't want system notification to linger if we handle it here)
+    if (Capacitor.isNativePlatform()) {
+        try {
+            await LocalNotifications.cancel({ notifications: [{ id: 1 }] });
+        } catch (e) {
+            console.error("Failed to cancel notification on finish", e);
+        }
+    }
+
     setAppState(AppState.ALARM);
     // 播放唤醒音乐
     if (globalWakeUpMusic?.path) {
@@ -695,7 +741,7 @@ export default function App() {
 
       <div className={`fixed inset-0 z-50 bg-[#0B0D14] flex flex-col transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] ${isSettingsOpen ? 'translate-x-0' : 'translate-x-full'}`}>
             {/* Updated padding: px-6 pb-5 pt-8 as requested */}
-            <div className="flex items-center justify-between px-6 pb-5 pt-12 border-b border-white/5 bg-[#0B0D14] shrink-0 z-20">
+            <div className="flex items-center justify-between px-6 pb-5 pt-8 border-b border-white/5 bg-[#0B0D14] shrink-0 z-20">
                 <div className="text-xl font-semibold tracking-wide text-white">设置</div>
                 <button onClick={() => setIsSettingsOpen(false)} className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors">
                     <X className="w-5 h-5 text-white/70" />
