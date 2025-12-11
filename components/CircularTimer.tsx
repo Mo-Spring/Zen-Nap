@@ -17,7 +17,11 @@ export const CircularTimer: React.FC<CircularTimerProps> = ({
   const radius = size / 2;
   const strokeWidth = 2;
   const normalizedRadius = radius - strokeWidth * 2;
-  const circumference = normalizedRadius * 2 * Math.PI;
+  
+  // Fix: Calculate circumference based on the actual radius of the drawn circle
+  // The drawn circle is set to r={normalizedRadius - 20} below
+  const drawnRadius = normalizedRadius - 20;
+  const circumference = drawnRadius * 2 * Math.PI;
   const strokeDashoffset = circumference - progress * circumference;
 
   // Generate ticks
@@ -69,7 +73,7 @@ export const CircularTimer: React.FC<CircularTimerProps> = ({
           strokeDasharray={`${circumference} ${circumference}`}
           style={{ strokeDashoffset }}
           strokeLinecap="round"
-          r={normalizedRadius - 20} // Slightly inner ring
+          r={drawnRadius} 
           cx={radius}
           cy={radius}
           className="transition-all duration-1000 ease-linear opacity-90"
