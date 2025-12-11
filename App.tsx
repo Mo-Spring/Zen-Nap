@@ -646,10 +646,10 @@ export default function App() {
       
       {/* 背景模糊层 - 修改：计时状态下保持30px模糊，扩大范围至-100px防止边缘瑕疵 */}
       <div 
-        className={`${transitionClass} fixed -inset-[100px] z-5`}
+        className={`${transitionClass} fixed -inset-[1000px] z-5`}
         style={{ 
-          backdropFilter: `blur(${isAnimating || appState === AppState.RUNNING ? 30 : 0}px)`,
-          WebkitBackdropFilter: `blur(${isAnimating || appState === AppState.RUNNING ? 30 : 0}px)`,
+          backdropFilter: `blur(${isAnimating || appState === AppState.RUNNING ? 20 : 0}px)`,
+          WebkitBackdropFilter: `blur(${isAnimating || appState === AppState.RUNNING ? 20 : 0}px)`,
         }}
       />
 
