@@ -622,23 +622,28 @@ export default function App() {
 
   const handleAlarmTouchMove = (e: React.TouchEvent) => {
     if (appState !== AppState.ALARM || dragStartY.current === null) return;
-    const touch = e.touches[0];
-    const screenH = window.innerHeight;
-    const y = touch.clientY;
+    const currentY = e.touches[0].clientY;
     
-    const delta = screenH - y;
+    // 计算从点击处向上的拖拽距离
+    const diff = dragStartY.current - currentY;
     
-    if (delta > 200) {
-        completeSession();
-    }
-    
-    setSlideY(Math.min(delta, 250));
+    // 只处理向上滑动 (diff > 0)，并限制最大视觉位移
+    setSlideY(Math.max(0, Math.min(diff, 300)));
   };
 
   const handleAlarmTouchEnd = () => {
-    if (appState === AppState.ALARM && slideY < 200) {
+    if (appState !== AppState.ALARM) return;
+    
+    // 滑动距离阈值，超过此距离且松手才触发
+    const SWIPE_THRESHOLD = 150; 
+    
+    if (slideY > SWIPE_THRESHOLD) {
+        completeSession();
+    } else {
+        // 未达到阈值或用户滑回去了，重置
         setSlideY(0);
     }
+    dragStartY.current = null;
   };
 
   const handleAlarmMouseDown = (e: React.MouseEvent) => {
@@ -649,24 +654,23 @@ export default function App() {
   const handleAlarmMouseMove = (e: React.MouseEvent) => {
       if (appState !== AppState.ALARM || dragStartY.current === null) return;
       
-      const screenH = window.innerHeight;
-      const y = e.clientY;
+      const currentY = e.clientY;
+      const diff = dragStartY.current - currentY;
       
-      const delta = screenH - y;
-      
-      if (delta > 200) {
-          completeSession();
-          dragStartY.current = null;
-      }
-      setSlideY(Math.min(delta, 250));
+      setSlideY(Math.max(0, Math.min(diff, 300)));
   };
 
   const handleAlarmMouseUp = () => {
       if (appState !== AppState.ALARM) return;
-      dragStartY.current = null;
-      if (slideY < 200) {
+      
+      const SWIPE_THRESHOLD = 150;
+
+      if (slideY > SWIPE_THRESHOLD) {
+          completeSession();
+      } else {
           setSlideY(0);
       }
+      dragStartY.current = null;
   };
 
   // 获取唤醒时间字符串
@@ -678,11 +682,11 @@ export default function App() {
   // 格式时间显示
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return { m, s };
+    const  = seconds % 60;
+    return { m,  };
   };
 
-  const { m, s } = formatTime(timeLeft);
+  const { m,  } = formatTime(timeLeft);
   const StartIcon = IconMap[currentMode.iconType];
 
   // 动画计算
@@ -740,7 +744,7 @@ export default function App() {
       />
 
       <div className={`fixed inset-0 z-50 bg-[#0B0D14] flex flex-col transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] ${isSettingsOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-            {/* Updated padding: px-6 pb-5 pt-8 as requested */}
+            {/* Updated padding: px-6 pb-5 pt-12 as requested */}
             <div className="flex items-center justify-between px-6 pb-5 pt-8 border-b border-white/5 bg-[#0B0D14] shrink-0 z-20">
                 <div className="text-xl font-semibold tracking-wide text-white">设置</div>
                 <button onClick={() => setIsSettingsOpen(false)} className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors">
@@ -1156,8 +1160,10 @@ export default function App() {
                     className="flex flex-col items-center transition-transform duration-100 ease-out cursor-pointer pb-8"
                     style={{ transform: `translateY(-${slideY}px)` }}
                 >
-                    <ChevronUp className="w-6 h-6 text-white/70 animate-bounce" />
-                    <div className="text-white/70 text-sm mt-2 font-medium tracking-wide">上滑停止唤醒</div>
+                    <ChevronUp className={`w-6 h-6 text-white/70 ${slideY > 150 ? '' : 'animate-bounce'}`} />
+                    <div className="text-white/70 text-sm mt-2 font-medium tracking-wide">
+                        {slideY > 150 ? "松手结束小憩" : "上滑停止唤醒"}
+                    </div>
                 </div>
             </div>
         </div>
