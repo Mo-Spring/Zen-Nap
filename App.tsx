@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { Background } from './components/Background';
 import { CircularTimer } from './components/CircularTimer';
@@ -8,6 +7,7 @@ import { AppState, NapMode, SessionStats } from './types';
 import { Play, ChevronUp, Music, X, Upload } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
+import { StatusBar, Style } from '@capacitor/status-bar';
 
 // --- DATA ---
 const MODES: NapMode[] = [
@@ -144,6 +144,25 @@ export default function App() {
   const displayDuration = currentMode.id === 'custom' ? customDuration : currentMode.durationMinutes;
 
   // --- EFFECTS ---
+
+  useEffect(() => {
+    // 沉浸式状态栏设置
+    if (Capacitor.isNativePlatform()) {
+        const initStatusBar = async () => {
+            try {
+                // 让 WebView 延伸到状态栏下方
+                await StatusBar.setOverlaysWebView({ overlay: true });
+                // 设置状态栏文字为浅色（适应深色背景）
+                await StatusBar.setStyle({ style: Style.Dark }); 
+                // 设置状态栏背景为透明
+                await StatusBar.setBackgroundColor({ color: '#00000000' });
+            } catch (err) {
+                console.warn('StatusBar config failed', err);
+            }
+        };
+        initStatusBar();
+    }
+  }, []);
 
   useEffect(() => {
     const savedSettings = localStorage.getItem('zenNapSettings');
