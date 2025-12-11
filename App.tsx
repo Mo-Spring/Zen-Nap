@@ -367,13 +367,25 @@ export default function App() {
         clearInterval(stopIntervalRef.current);
         stopIntervalRef.current = null;
     }
-    setIsAnimating(false);
-    setIsStopping(false); // 重置停止动画状态
+    
+    // Set initial state for "enter" animation (hidden state)
+    setIsAnimating(true);
+    setIsStopping(false);
+    
     setAppState(AppState.IDLE);
     setSessionStats(null);
     setStartTime(null);
     setEndTime(null);
     stopAllAudio();
+
+    // Trigger transition to visible state
+    // Double requestAnimationFrame ensures that the DOM has updated with the initial (hidden) state
+    // before we switch to the final (visible) state, allowing the CSS transition to play.
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            setIsAnimating(false);
+        });
+    });
   };
 
   const finishTimer = () => {
@@ -1083,10 +1095,7 @@ export default function App() {
                 </div>
             </div>
 
-            <button onClick={() => {
-                stopAllAudio();
-                setAppState(AppState.IDLE);
-            }} className="mt-8 p-4 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
+            <button onClick={stopTimer} className="mt-8 p-4 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
                 <X className="w-6 h-6 text-white" />
             </button>
         </div>
