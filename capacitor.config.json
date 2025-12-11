@@ -1,9 +1,15 @@
-
 {
   "appId": "com.zennaptimer.app",
   "appName": "Zen Nap Timer",
   "webDir": "dist",
   "server": {
     "androidScheme": "https"
+  },
+  "plugins": {
+    "StatusBar": {
+      "overlaysWebView": true,
+      "style": "DARK",
+      "backgroundColor": "#00000000"
+    }
   }
 }
