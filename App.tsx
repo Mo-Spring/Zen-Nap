@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { Background } from './components/Background';
 import { CircularTimer } from './components/CircularTimer';
 import { WheelPicker } from './components/WheelPicker';
@@ -122,12 +122,16 @@ export default function App() {
   // Long Press to Stop State
   const [stopProgress, setStopProgress] = useState(0);
   
+  // Indicator State for Mode Selection Animation
+  const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, top: 0, width: 0, height: 0, opacity: 0 });
+  
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const animationFrameRef = useRef<number | null>(null);
   const stopIntervalRef = useRef<number | null>(null);
+  const modeButtonsRef = useRef<(HTMLButtonElement | null)[]>([]);
   
   // Gesture Refs
   const dragStartY = useRef<number | null>(null);
@@ -170,6 +174,20 @@ export default function App() {
     };
     localStorage.setItem('zenNapSettings', JSON.stringify(settings));
   }, [globalWakeUpMusic, globalRefreshMusic, modeGuideMusic, snoozeDuration]);
+
+  // Update Indicator Position when mode changes
+  useLayoutEffect(() => {
+      const btn = modeButtonsRef.current[selectedModeIndex];
+      if (btn) {
+          setIndicatorStyle({
+              left: btn.offsetLeft,
+              top: btn.offsetTop,
+              width: btn.offsetWidth,
+              height: btn.offsetHeight,
+              opacity: 1
+          });
+      }
+  }, [selectedModeIndex]);
 
   // 计时器逻辑
   useEffect(() => {
@@ -616,7 +634,7 @@ export default function App() {
       onTouchMove={handleAlarmTouchMove} 
       onTouchEnd={handleAlarmTouchEnd}
       onMouseDown={handleAlarmMouseDown}
-      onMouseMove={handleAlarmMouseMove}
+      onMouseMove={handleAlarmMouseDown}
       onMouseUp={handleAlarmMouseUp}
     >
       <Background color={currentMode.themeColor} image={currentMode.bgImage} />
@@ -794,16 +812,29 @@ export default function App() {
             >
                 <div 
                     ref={scrollContainerRef}
-                    className="mt-8 flex overflow-x-auto space-x-2 px-4 pb-4 no-scrollbar"
+                    className="mt-8 flex overflow-x-auto space-x-2 px-4 pb-4 no-scrollbar relative items-center"
                     style={{ maskImage: 'linear-gradient(to right, transparent, black 5%, black 95%, transparent)' }}
                 >
+                    {/* Active Indicator - Light Ball Effect */}
+                    <div 
+                        className="absolute rounded-full bg-white/20 backdrop-blur-md border border-white/30 transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] z-0 shadow-[0_0_15px_rgba(255,255,255,0.3)]"
+                        style={{ 
+                            left: indicatorStyle.left, 
+                            top: indicatorStyle.top,
+                            width: indicatorStyle.width,
+                            height: indicatorStyle.height,
+                            opacity: indicatorStyle.opacity,
+                        }}
+                    />
+
                     {MODES.map((mode, idx) => (
                         <button
                             key={mode.id}
+                            ref={(el) => { modeButtonsRef.current[idx] = el; }}
                             onClick={() => handleModeSelect(idx)}
                             className={`
-                                whitespace-nowrap px-4 py-2 rounded-full text-sm font-medium transition-all duration-300
-                                ${idx === selectedModeIndex ? 'bg-white/20 text-white backdrop-blur-md border border-white/30' : 'text-white/50 hover:text-white/80'}
+                                whitespace-nowrap px-4 py-2 rounded-full text-sm font-medium transition-colors duration-300 relative z-10
+                                ${idx === selectedModeIndex ? 'text-white' : 'text-white/50 hover:text-white/80'}
                             `}
                             disabled={isAnimating}
                         >
@@ -1004,7 +1035,7 @@ export default function App() {
           onTouchMove={handleAlarmTouchMove}
           onTouchEnd={handleAlarmTouchEnd}
           onMouseDown={handleAlarmMouseDown}
-          onMouseMove={handleAlarmMouseMove}
+          onMouseMove={handleAlarmMouseDown}
           onMouseUp={handleAlarmMouseUp}
         >
             <div className="absolute inset-0 z-[-1]">
@@ -1038,7 +1069,7 @@ export default function App() {
                     className="z-10 bg-white/10 hover:bg-white/20 backdrop-blur-lg w-48 h-48 rounded-full flex flex-col items-center justify-center text-center px-4 border border-white/10 cursor-pointer transition-all active:scale-95 active:bg-white/30"
                 >
                     <div className="text-xl font-medium mb-1">再睡{snoozeDuration}分钟</div>
-                    <div className="text-xs text-white/60">「多倍劫」唤醒你</div>
+                    <div className="text-xs text-white/60">起床了</div>
                 </div>
             </div>
 
@@ -1057,9 +1088,6 @@ export default function App() {
       {appState === AppState.SUMMARY && sessionStats && (
         <div className="absolute inset-0 z-40 bg-black/60 flex flex-col items-center justify-center p-6">
             <div className="w-full max-w-sm bg-[#2a2a35] rounded-3xl p-6 shadow-2xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 opacity-20">
-                    <img src="https://picsum.photos/id/40/200/200" className="mask-image-gradient" alt="cat" />
-                </div>
                 
                 <div className="relative z-10">
                     <div className="text-gray-400 text-sm mb-1">{currentMode.name}</div>
