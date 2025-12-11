@@ -637,7 +637,12 @@ export default function App() {
       onMouseMove={handleAlarmMouseMove}
       onMouseUp={handleAlarmMouseUp}
     >
-      <Background color={currentMode.themeColor} image={currentMode.bgImage} />
+      {/* 
+        优化：传入 activeModeId 和 MODES 数组
+        Background 组件内部会渲染所有模式的图片并进行 opacity 切换
+        避免图片加载导致的闪黑问题
+      */}
+      <Background activeModeId={currentMode.id} modes={MODES} />
       
       {/* 背景模糊层 - 修改：计时状态下保持30px模糊，扩大范围至-100px防止边缘瑕疵 */}
       <div 
@@ -785,7 +790,7 @@ export default function App() {
         <div className="flex flex-col h-full relative z-10">
             {/* 顶部栏 - 向上位移淡出 */}
             <div 
-              className={`pt-8 px-6 flex justify-between items-center text-white/80 relative z-40 ${transitionClass}`}
+              className={`pt-5 px-6 flex justify-between items-center text-white/80 relative z-40 ${transitionClass}`}
               style={{ 
                   transform: isAnimating ? 'translateY(-60px)' : 'translateY(0)',
                   opacity: isAnimating ? 0 : 1
@@ -812,7 +817,7 @@ export default function App() {
             >
                 <div 
                     ref={scrollContainerRef}
-                    className="mt-14 flex overflow-x-auto space-x-2 px-4 pb-4 no-scrollbar relative items-center"
+                    className="mt-4 pt-6 flex overflow-x-auto space-x-2 px-4 pb-4 no-scrollbar relative items-center"
                     style={{ maskImage: 'linear-gradient(to right, transparent, black 5%, black 95%, transparent)' }}
                 >
                     {/* Active Indicator - Light Ball Effect */}
@@ -1069,7 +1074,7 @@ export default function App() {
                     className="z-10 bg-white/10 hover:bg-white/20 backdrop-blur-lg w-48 h-48 rounded-full flex flex-col items-center justify-center text-center px-4 border border-white/10 cursor-pointer transition-all active:scale-95 active:bg-white/30"
                 >
                     <div className="text-xl font-medium mb-1">再睡{snoozeDuration}分钟</div>
-                    <div className="text-xs text-white/60">点击进入贪睡模式</div>
+                    <div className="text-xs text-white/60">起床了</div>
                 </div>
             </div>
 
