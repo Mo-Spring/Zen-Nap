@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Background } from './components/Background';
 import { CircularTimer } from './components/CircularTimer';
@@ -86,6 +87,8 @@ export default function App() {
   
   // 动画状态
   const [isAnimating, setIsAnimating] = useState(false);
+  // 停止动画状态
+  const [isStopping, setIsStopping] = useState(false);
 
   // Settings State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -352,7 +355,7 @@ export default function App() {
     setTimeout(() => {
         startTimerInternal();
         setIsAnimating(false);
-    }, 600); // 600ms match CSS
+    }, 700); // Changed to 700ms to match CSS duration
   };
 
   const stopTimer = () => {
@@ -365,6 +368,7 @@ export default function App() {
         stopIntervalRef.current = null;
     }
     setIsAnimating(false);
+    setIsStopping(false); // 重置停止动画状态
     setAppState(AppState.IDLE);
     setSessionStats(null);
     setStartTime(null);
@@ -397,9 +401,9 @@ export default function App() {
 
   // --- GESTURE HANDLERS ---
   const handleStopPressStart = () => {
-    if (stopIntervalRef.current || isAnimating) return;
+    if (stopIntervalRef.current || isAnimating || isStopping) return;
     const startTime = Date.now();
-    const DURATION = 3000; // 3 seconds
+    const DURATION = 1500; // 长按时间，1.5秒
 
     stopIntervalRef.current = window.setInterval(() => {
         const elapsed = Date.now() - startTime;
@@ -407,17 +411,28 @@ export default function App() {
         setStopProgress(progress);
 
         if (progress >= 1) {
-            stopTimer();
+            // 长按完成
+            if (stopIntervalRef.current) {
+                clearInterval(stopIntervalRef.current);
+                stopIntervalRef.current = null;
+            }
+            // 触发退出动画
+            setIsStopping(true);
+            // 等待动画完成后切换状态
+            setTimeout(() => {
+                stopTimer();
+            }, 500); // 500ms 对应 CSS transition duration
         }
     }, 16);
   };
 
   const handleStopPressEnd = () => {
-    if (stopIntervalRef.current) {
+    // 只有在没有进入 stopping 状态时才取消
+    if (!isStopping && stopIntervalRef.current) {
         clearInterval(stopIntervalRef.current);
         stopIntervalRef.current = null;
+        setStopProgress(0);
     }
-    setStopProgress(0);
   };
   
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -559,6 +574,8 @@ export default function App() {
   
   // iOS 缓动曲线
   const transitionClass = "transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)]";
+  // 停止动画曲线 (稍微快一点，且带有缩小效果)
+  const stopTransitionClass = "transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]";
 
   return (
     <div 
@@ -571,12 +588,12 @@ export default function App() {
     >
       <Background color={currentMode.themeColor} image={currentMode.bgImage} />
       
-      {/* 背景模糊层 */}
+      {/* 背景模糊层 - 修改：计时状态下保持30px模糊 */}
       <div 
         className={`${transitionClass} absolute inset-0 z-5`}
         style={{ 
-          backdropFilter: `blur(${isAnimating ? 10 : 0}px)`,
-          WebkitBackdropFilter: `blur(${isAnimating ? 10 : 0}px)`,
+          backdropFilter: `blur(${isAnimating || appState === AppState.RUNNING ? 30 : 0}px)`,
+          WebkitBackdropFilter: `blur(${isAnimating || appState === AppState.RUNNING ? 30 : 0}px)`,
         }}
       />
 
@@ -731,7 +748,7 @@ export default function App() {
             <div 
               className={`pt-12 px-6 flex justify-between items-center text-white/80 relative z-40 ${transitionClass}`}
               style={{ 
-                  transform: isAnimating ? 'translateY(-40px)' : 'translateY(0)',
+                  transform: isAnimating ? 'translateY(-60px)' : 'translateY(0)',
                   opacity: isAnimating ? 0 : 1
               }}
             >
@@ -746,11 +763,11 @@ export default function App() {
                 </button>
             </div>
 
-            {/* 模式选择 - 向上位移淡出，稍微滞后 */}
+            {/* 模式选择 - 向上位移淡出，增加位移量 */}
             <div 
               className={`relative z-30 ${transitionClass}`}
               style={{ 
-                transform: isAnimating ? 'translateY(-60px)' : 'translateY(0)',
+                transform: isAnimating ? 'translateY(-80px)' : 'translateY(0)',
                 opacity: isAnimating ? 0 : 1
               }}
             >
@@ -790,7 +807,7 @@ export default function App() {
                         <div 
                           className={`${transitionClass} ease-out`}
                           style={{ 
-                              transform: isAnimating ? 'scale(1.2)' : 'scale(1)',
+                              transform: isAnimating ? 'scale(1.25)' : 'scale(1)',
                               opacity: isAnimating ? 0 : 1
                           }}
                         >
@@ -803,7 +820,7 @@ export default function App() {
                             <div 
                               className={`${transitionClass} ease-out`}
                               style={{ 
-                                  transform: isAnimating ? 'scale(1.2)' : 'scale(1)',
+                                  transform: isAnimating ? 'scale(1.25)' : 'scale(1)',
                                   opacity: isAnimating ? 0 : 1
                               }}
                             >
@@ -818,7 +835,7 @@ export default function App() {
                             <div 
                               className={`flex flex-col items-center justify-center select-none ${transitionClass} ease-out`}
                               style={{ 
-                                  transform: isAnimating ? 'scale(1.2)' : 'scale(1)',
+                                  transform: isAnimating ? 'scale(1.25)' : 'scale(1)',
                                   opacity: isAnimating ? 0 : 1
                               }}
                             >
@@ -838,7 +855,7 @@ export default function App() {
                   className={`pb-16 flex flex-col items-center justify-center w-full relative z-20 ${transitionClass}`}
                   style={{ 
                       opacity: isAnimating ? 0 : 1,
-                      transform: isAnimating ? 'translateY(20px)' : 'translateY(0)'
+                      transform: isAnimating ? 'translateY(40px)' : 'translateY(0)'
                   }}
                 >
                     
@@ -889,7 +906,12 @@ export default function App() {
       )}
 
       {appState === AppState.RUNNING && (
-        <div className="absolute inset-0 z-20 flex flex-col h-full animate-fade-in bg-black/20">
+        <div className={`absolute inset-0 z-20 flex flex-col h-full animate-fade-in ${stopTransitionClass}`}
+             style={{
+                 transform: isStopping ? 'scale(0.8)' : 'scale(1)',
+                 opacity: isStopping ? 0 : 1
+             }}
+        >
             <div className="pt-12 px-6 flex justify-center items-center text-white/80">
                 <div className="text-lg font-light tracking-wide opacity-80">{currentMode.name.split(' ')[0]}</div>
             </div>
