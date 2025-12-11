@@ -1021,7 +1021,7 @@ export default function App() {
                     className="z-10 bg-white/10 hover:bg-white/20 backdrop-blur-lg w-48 h-48 rounded-full flex flex-col items-center justify-center text-center px-4 border border-white/10 cursor-pointer transition-all active:scale-95 active:bg-white/30"
                 >
                     <div className="text-xl font-medium mb-1">再睡{snoozeDuration}分钟</div>
-                    <div className="text-xs text-white/60">「多倍劫」唤醒你</div>
+                    <div className="text-xs text-white/60">起床了</div>
                 </div>
             </div>
 
