@@ -634,7 +634,7 @@ export default function App() {
       onTouchMove={handleAlarmTouchMove} 
       onTouchEnd={handleAlarmTouchEnd}
       onMouseDown={handleAlarmMouseDown}
-      onMouseMove={handleAlarmMouseDown}
+      onMouseMove={handleAlarmMouseMove}
       onMouseUp={handleAlarmMouseUp}
     >
       <Background color={currentMode.themeColor} image={currentMode.bgImage} />
@@ -1035,7 +1035,7 @@ export default function App() {
           onTouchMove={handleAlarmTouchMove}
           onTouchEnd={handleAlarmTouchEnd}
           onMouseDown={handleAlarmMouseDown}
-          onMouseMove={handleAlarmMouseDown}
+          onMouseMove={handleAlarmMouseMove}
           onMouseUp={handleAlarmMouseUp}
         >
             <div className="absolute inset-0 z-[-1]">
