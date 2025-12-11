@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Background } from './components/Background';
 import { CircularTimer } from './components/CircularTimer';
@@ -609,7 +608,7 @@ export default function App() {
       
       {/* 背景模糊层 - 修改：计时状态下保持30px模糊 */}
       <div 
-        className={`${transitionClass} absolute inset-0 z-5`}
+        className={`${transitionClass} fixed -inset-10 z-5`}
         style={{ 
           backdropFilter: `blur(${isAnimating || appState === AppState.RUNNING ? 30 : 0}px)`,
           WebkitBackdropFilter: `blur(${isAnimating || appState === AppState.RUNNING ? 30 : 0}px)`,
