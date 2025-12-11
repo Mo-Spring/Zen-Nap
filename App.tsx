@@ -632,11 +632,11 @@ export default function App() {
   // 格式时间显示
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
-    const  = seconds % 60;
-    return { m,  };
+    const s = seconds % 60;
+    return { m, s };
   };
 
-  const { m,  } = formatTime(timeLeft);
+  const { m, s } = formatTime(timeLeft);
   const StartIcon = IconMap[currentMode.iconType];
 
   // 动画计算
