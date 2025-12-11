@@ -407,7 +407,7 @@ export default function App() {
     setTimeout(() => {
         startTimerInternal(displayDuration); // 传入当前选择的模式时长
         setIsAnimating(false);
-    }, 1000); // Updated to 1000ms to match the smoother CSS transition
+    }, 700); // Reverted to 700ms to match the snappier CSS transition
   };
 
   const stopTimer = () => {
@@ -632,19 +632,19 @@ export default function App() {
   // 格式时间显示
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
-    const  = seconds % 60;
-    return { m,  };
+    const s = seconds % 60;
+    return { m, s };
   };
 
-  const { m,  } = formatTime(timeLeft);
+  const { m, s } = formatTime(timeLeft);
   const StartIcon = IconMap[currentMode.iconType];
 
   // 动画计算
   const idleTimerSize = currentMode.id === 'custom' ? 260 : 230;
   const runningTimerSize = 250;
   
-  // 优化：更平滑的动画曲线和更长的持续时间，消除跳跃感
-  const transitionClass = "transition-all duration-700 ease-[cubic-bezier(0.25,0.1,0.25,1)]";
+  // Revert to 700ms and original snappy bezier curve
+  const transitionClass = "transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)]";
   // 停止动画曲线 (稍微快一点，且带有缩小效果)
   const stopTransitionClass = "transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]";
 
@@ -694,7 +694,8 @@ export default function App() {
       />
 
       <div className={`fixed inset-0 z-50 bg-[#0B0D14] flex flex-col transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] ${isSettingsOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-            <div className="flex items-center justify-between px-6 pb-5 pt-10 border-b border-white/5 bg-[#0B0D14] shrink-0 z-20">
+            {/* Updated padding: px-6 pb-5 pt-8 as requested */}
+            <div className="flex items-center justify-between px-6 pb-5 pt-8 border-b border-white/5 bg-[#0B0D14] shrink-0 z-20">
                 <div className="text-xl font-semibold tracking-wide text-white">设置</div>
                 <button onClick={() => setIsSettingsOpen(false)} className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors">
                     <X className="w-5 h-5 text-white/70" />
