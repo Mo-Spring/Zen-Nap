@@ -630,8 +630,7 @@ export default function App() {
           onChange={onFileChange}
       />
 
-      {isSettingsOpen && (
-        <div className="fixed inset-0 z-50 bg-[#0B0D14] flex flex-col animate-fade-in">
+      <div className={`fixed inset-0 z-50 bg-[#0B0D14] flex flex-col transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] ${isSettingsOpen ? 'translate-x-0' : 'translate-x-full'}`}>
             <div className="flex items-center justify-between px-6 py-5 border-b border-white/5 bg-[#0B0D14] shrink-0 z-20">
                 <div className="text-xl font-semibold tracking-wide text-white">设置</div>
                 <button onClick={() => setIsSettingsOpen(false)} className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors">
@@ -748,8 +747,7 @@ export default function App() {
                     </div>
                 </div>
             </div>
-        </div>
-      )}
+      </div>
 
       {appState === AppState.IDLE && (
         <div className="flex flex-col h-full relative z-10">
