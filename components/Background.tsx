@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 interface BackgroundProps {
@@ -8,7 +7,7 @@ interface BackgroundProps {
 
 export const Background: React.FC<BackgroundProps> = ({ color, image }) => {
   return (
-    <div className="fixed inset-0 z-0 transition-colors duration-700 ease-in-out bg-black">
+    <div className="fixed -inset-[50px] z-0 transition-colors duration-700 ease-in-out bg-black">
       {/* Base Image */}
       <div 
         className="absolute inset-0 bg-cover bg-center transition-opacity duration-700 opacity-60"
