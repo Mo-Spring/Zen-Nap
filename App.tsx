@@ -103,6 +103,7 @@ export default function App() {
   
   // Timer State
   const [timeLeft, setTimeLeft] = useState(0);
+  const [activeDuration, setActiveDuration] = useState(0); // 新增：当前活动的倒计时总时长（分钟），与选中的模式时长解耦
   const [endTime, setEndTime] = useState<Date | null>(null);
   const [startTime, setStartTime] = useState<Date | null>(null);
   const [sessionStats, setSessionStats] = useState<SessionStats | null>(null);
@@ -166,7 +167,7 @@ export default function App() {
 
   // 计时器逻辑
   useEffect(() => {
-    if (appState === AppState.RUNNING && startTime && timeLeft > 0) {
+    if (appState === AppState.RUNNING && startTime && timeLeft > 0 && activeDuration > 0) {
       const updateTimer = () => {
         if (!startTime) {
           finishTimer();
@@ -175,7 +176,7 @@ export default function App() {
         
         const now = Date.now();
         const elapsedSeconds = Math.floor((now - startTime.getTime()) / 1000);
-        const totalDurationSeconds = displayDuration * 60;
+        const totalDurationSeconds = activeDuration * 60; // 使用 activeDuration 计算剩余时间
         const remaining = Math.max(0, totalDurationSeconds - elapsedSeconds);
         
         setTimeLeft(remaining);
@@ -196,7 +197,7 @@ export default function App() {
         animationFrameRef.current = null;
       }
     };
-  }, [appState, startTime, displayDuration]);
+  }, [appState, startTime, activeDuration]); // 依赖项改为 activeDuration
 
 
   // --- AUDIO HANDLERS ---
@@ -327,9 +328,9 @@ export default function App() {
     }
   };
 
-  const startTimerInternal = () => {
-    const durationMin = displayDuration;
-    const durationSec = durationMin * 60;
+  const startTimerInternal = (durationMinutes: number) => {
+    setActiveDuration(durationMinutes); // 设置当前激活的时长
+    const durationSec = durationMinutes * 60;
     
     setTimeLeft(durationSec);
     const now = new Date();
@@ -359,7 +360,7 @@ export default function App() {
     setIsAnimating(true);
     // Use setTimeout to match the CSS transition duration
     setTimeout(() => {
-        startTimerInternal();
+        startTimerInternal(displayDuration); // 传入当前选择的模式时长
         setIsAnimating(false);
     }, 700); // Changed to 700ms to match CSS duration
   };
@@ -385,6 +386,7 @@ export default function App() {
     setSessionStats(null);
     setStartTime(null);
     setEndTime(null);
+    setActiveDuration(0); // 重置活动时长
     stopAllAudio();
 
     // Trigger transition to visible state
@@ -416,7 +418,7 @@ export default function App() {
 
   const handleSnooze = () => {
     stopAllAudio(); // 用户点击再睡一会，停止当前音乐
-    startTimerInternal();
+    startTimerInternal(snoozeDuration); // 使用贪睡时长启动计时
     setSlideY(0);
   };
 
@@ -928,7 +930,8 @@ export default function App() {
 
             <div className="flex-1 flex flex-col items-center justify-center">
                 <div className="relative flex items-center justify-center">
-                    <CircularTimer progress={1 - (timeLeft / (displayDuration * 60))} size={runningTimerSize} color="white" />
+                    {/* 使用 activeDuration 计算圆环进度 */}
+                    <CircularTimer progress={1 - (timeLeft / (activeDuration * 60))} size={runningTimerSize} color="white" />
                     
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
                         <div className="text-7xl font-thin tabular-nums tracking-tighter text-white leading-none">
@@ -1023,7 +1026,7 @@ export default function App() {
                     className="z-10 bg-white/10 hover:bg-white/20 backdrop-blur-lg w-48 h-48 rounded-full flex flex-col items-center justify-center text-center px-4 border border-white/10 cursor-pointer transition-all active:scale-95 active:bg-white/30"
                 >
                     <div className="text-xl font-medium mb-1">再睡{snoozeDuration}分钟</div>
-                    <div className="text-xs text-white/60">起床了</div>
+                    <div className="text-xs text-white/60">「多倍劫」唤醒你</div>
                 </div>
             </div>
 
