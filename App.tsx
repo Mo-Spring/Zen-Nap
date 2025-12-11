@@ -790,7 +790,7 @@ export default function App() {
         <div className="flex flex-col h-full relative z-10">
             {/* 顶部栏 - 向上位移淡出 */}
             <div 
-              className={`pt-4 px-6 flex justify-between items-center text-white/80 relative z-40 ${transitionClass}`}
+              className={`pt-6 px-6 flex justify-between items-center text-white/80 relative z-40 ${transitionClass}`}
               style={{ 
                   transform: isAnimating ? 'translateY(-60px)' : 'translateY(0)',
                   opacity: isAnimating ? 0 : 1
