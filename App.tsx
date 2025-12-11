@@ -407,7 +407,7 @@ export default function App() {
     setTimeout(() => {
         startTimerInternal(displayDuration); // 传入当前选择的模式时长
         setIsAnimating(false);
-    }, 700); // Changed to 700ms to match CSS duration
+    }, 1000); // Updated to 1000ms to match the smoother CSS transition
   };
 
   const stopTimer = () => {
@@ -643,8 +643,8 @@ export default function App() {
   const idleTimerSize = currentMode.id === 'custom' ? 260 : 230;
   const runningTimerSize = 250;
   
-  // iOS 缓动曲线
-  const transitionClass = "transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)]";
+  // 优化：更平滑的动画曲线和更长的持续时间，消除跳跃感
+  const transitionClass = "transition-all duration-1000 ease-[cubic-bezier(0.25,0.1,0.25,1)]";
   // 停止动画曲线 (稍微快一点，且带有缩小效果)
   const stopTransitionClass = "transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]";
 
@@ -664,12 +664,18 @@ export default function App() {
       */}
       <Background activeModeId={currentMode.id} modes={MODES} />
       
-      {/* 背景模糊层 - 修改：计时状态下保持30px模糊，扩大范围至-100px防止边缘瑕疵 */}
+      {/* 
+        背景模糊层优化：
+        1. inset-[200px]: 进一步扩大边界，确保屏幕边缘采样无瑕疵
+        2. transform-gpu: 强制GPU加速，防止合成层抖动
+        3. will-change: 提前告知浏览器优化
+      */}
       <div 
-        className={`${transitionClass} fixed -inset-[100px] z-5`}
+        className={`${transitionClass} fixed -inset-[200px] z-5 transform-gpu`}
         style={{ 
           backdropFilter: `blur(${isAnimating || appState === AppState.RUNNING ? 20 : 0}px)`,
           WebkitBackdropFilter: `blur(${isAnimating || appState === AppState.RUNNING ? 20 : 0}px)`,
+          willChange: 'backdrop-filter'
         }}
       />
 
