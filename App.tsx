@@ -92,7 +92,6 @@ export default function App() {
 
   // Settings State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [painlessWakeUpDuration, setPainlessWakeUpDuration] = useState(10);
   const [snoozeDuration, setSnoozeDuration] = useState(5);
 
   // Music State
@@ -272,11 +271,19 @@ export default function App() {
                   setGlobalWakeUpMusic(track);
               } else if (activeUploadContext.field === 'refresh') {
                   setGlobalRefreshMusic(track);
-              } else if (activeUploadContext.field === 'guide' && activeUploadContext.modeId) {
-                  setModeGuideMusic(prev => ({
-                      ...prev,
-                      [activeUploadContext.modeId!]: track
-                  }));
+              } else if (activeUploadContext.field === 'guide') {
+                  if (activeUploadContext.modeId === 'ALL') {
+                      const newGuides: Record<string, MusicTrack> = {};
+                      MODES.forEach(mode => {
+                          newGuides[mode.id] = track;
+                      });
+                      setModeGuideMusic(newGuides);
+                  } else if (activeUploadContext.modeId) {
+                      setModeGuideMusic(prev => ({
+                          ...prev,
+                          [activeUploadContext.modeId!]: track
+                      }));
+                  }
               }
           } catch (error) {
               console.error("Failed to save file:", error);
@@ -659,30 +666,11 @@ export default function App() {
 
                     <div className="bg-[#161821] rounded-xl mb-4 overflow-hidden border border-white/5">
                         <div className="p-4 flex items-center justify-between">
-                            <div>
-                                <div className="text-base font-medium text-white/90">无痛唤醒</div>
-                                <div className="text-xs text-white/40 mt-1">提前播放唤醒音 (单位: 秒)</div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <div className="bg-[#242630] rounded-lg px-2 py-1 min-w-[3.5rem] text-center border border-white/10">
-                                    <input 
-                                        type="number" 
-                                        value={painlessWakeUpDuration}
-                                        onChange={(e) => setPainlessWakeUpDuration(Math.max(0, Number(e.target.value)))}
-                                        className="bg-transparent text-white text-center w-full focus:outline-none"
-                                    />
-                                </div>
-                                <span className="text-sm text-white/60">秒</span>
-                            </div>
-                        </div>
-                        
-                        <div className="border-t border-white/5 mx-4" />
-                        
-                        <div className="p-4 flex items-center justify-between">
                             <div className="flex flex-col">
                                 <span className="text-base font-medium text-white/90">唤醒音频</span>
+                                <span className="text-xs text-white/40 mt-1">小憩结束时播放</span>
                                 {getMusicStatusText('wakeUp') && (
-                                    <span className="text-xs text-white/40 mt-1 max-w-[150px] truncate">{getMusicStatusText('wakeUp')}</span>
+                                    <span className="text-xs text-white/60 mt-1 max-w-[150px] truncate">{getMusicStatusText('wakeUp')}</span>
                                 )}
                             </div>
                             <button 
@@ -716,7 +704,16 @@ export default function App() {
                 </div>
 
                 <div className="mb-2">
-                    <div className="text-xs text-white/40 font-bold mb-3 uppercase tracking-wider pl-1">模式专属引导音乐</div>
+                    <div className="flex items-center justify-between mb-3 pl-1 pr-1">
+                        <div className="text-xs text-white/40 font-bold uppercase tracking-wider">模式专属引导音乐</div>
+                        <button 
+                            onClick={() => handleUploadClick('guide', 'ALL')}
+                            className="flex items-center gap-1 text-xs text-white/60 hover:text-white transition-colors bg-white/5 px-2 py-1 rounded-md border border-white/5"
+                        >
+                            <Upload className="w-3 h-3" />
+                            <span>一键设置所有</span>
+                        </button>
+                    </div>
                     
                     <div className="bg-[#161821] rounded-xl overflow-hidden border border-white/5">
                         {MODES.map((mode, idx) => {
