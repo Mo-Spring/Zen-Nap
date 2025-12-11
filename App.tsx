@@ -86,7 +86,6 @@ export default function App() {
   
   // 动画状态
   const [isAnimating, setIsAnimating] = useState(false);
-  const [animationProgress, setAnimationProgress] = useState(0);
 
   // Settings State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -198,31 +197,6 @@ export default function App() {
     };
   }, [appState, startTime, displayDuration]);
 
-  // 动画效果
-  useEffect(() => {
-    if (isAnimating) {
-      const duration = 500;
-      const startTime = Date.now();
-      
-      const animate = () => {
-        const elapsed = Date.now() - startTime;
-        const progress = Math.min(elapsed / duration, 1);
-        
-        const easeOutCubic = 1 - Math.pow(1 - progress, 3);
-        setAnimationProgress(easeOutCubic);
-        
-        if (progress < 1) {
-          requestAnimationFrame(animate);
-        } else {
-          setIsAnimating(false);
-          setAnimationProgress(0);
-          startTimerInternal();
-        }
-      };
-      
-      requestAnimationFrame(animate);
-    }
-  }, [isAnimating]);
 
   // --- AUDIO HANDLERS ---
   
@@ -374,6 +348,11 @@ export default function App() {
   const startTimer = () => {
     if (isAnimating || appState !== AppState.IDLE) return;
     setIsAnimating(true);
+    // Use setTimeout to match the CSS transition duration
+    setTimeout(() => {
+        startTimerInternal();
+        setIsAnimating(false);
+    }, 600); // 600ms match CSS
   };
 
   const stopTimer = () => {
@@ -386,7 +365,6 @@ export default function App() {
         stopIntervalRef.current = null;
     }
     setIsAnimating(false);
-    setAnimationProgress(0);
     setAppState(AppState.IDLE);
     setSessionStats(null);
     setStartTime(null);
@@ -579,10 +557,8 @@ export default function App() {
   const idleTimerSize = currentMode.id === 'custom' ? 260 : 230;
   const runningTimerSize = 250;
   
-  // iOS风格：中心放大，其他淡出
-  const timerScale = 1 + (animationProgress * 0.2);
-  const uiOpacity = 1 - animationProgress;
-  const blurAmount = animationProgress * 10;
+  // iOS 缓动曲线
+  const transitionClass = "transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)]";
 
   return (
     <div 
@@ -597,10 +573,10 @@ export default function App() {
       
       {/* 背景模糊层 */}
       <div 
-        className="absolute inset-0 z-5 transition-all duration-300"
+        className={`${transitionClass} absolute inset-0 z-5`}
         style={{ 
-          backdropFilter: `blur(${blurAmount}px)`,
-          WebkitBackdropFilter: `blur(${blurAmount}px)`,
+          backdropFilter: `blur(${isAnimating ? 10 : 0}px)`,
+          WebkitBackdropFilter: `blur(${isAnimating ? 10 : 0}px)`,
         }}
       />
 
@@ -751,10 +727,13 @@ export default function App() {
 
       {appState === AppState.IDLE && (
         <div className="flex flex-col h-full relative z-10">
-            {/* 顶部栏 */}
+            {/* 顶部栏 - 向上位移淡出 */}
             <div 
-              className="pt-12 px-6 flex justify-between items-center text-white/80 relative z-40 transition-all duration-500"
-              style={{ opacity: uiOpacity }}
+              className={`pt-12 px-6 flex justify-between items-center text-white/80 relative z-40 ${transitionClass}`}
+              style={{ 
+                  transform: isAnimating ? 'translateY(-40px)' : 'translateY(0)',
+                  opacity: isAnimating ? 0 : 1
+              }}
             >
                 <div className="w-6 h-6" />
                 <div className="text-lg tracking-wide font-medium">小憩</div>
@@ -767,10 +746,13 @@ export default function App() {
                 </button>
             </div>
 
-            {/* 模式选择 */}
+            {/* 模式选择 - 向上位移淡出，稍微滞后 */}
             <div 
-              className="relative z-30 transition-all duration-500"
-              style={{ opacity: uiOpacity }}
+              className={`relative z-30 ${transitionClass}`}
+              style={{ 
+                transform: isAnimating ? 'translateY(-60px)' : 'translateY(0)',
+                opacity: isAnimating ? 0 : 1
+              }}
             >
                 <div 
                     ref={scrollContainerRef}
@@ -793,7 +775,7 @@ export default function App() {
                 </div>
             </div>
 
-            {/* 主内容区域 */}
+            {/* 主内容区域 - 中间放大 */}
             <div 
               className="flex-1 flex flex-col items-center justify-center"
               onTouchStart={handleTouchStart}
@@ -806,8 +788,11 @@ export default function App() {
                 <div className="relative flex items-center justify-center min-h-[260px]">
                     {currentMode.id !== 'custom' && (
                         <div 
-                          className="transition-all duration-500 ease-out"
-                          style={{ transform: `scale(${timerScale})` }}
+                          className={`${transitionClass} ease-out`}
+                          style={{ 
+                              transform: isAnimating ? 'scale(1.2)' : 'scale(1)',
+                              opacity: isAnimating ? 0 : 1
+                          }}
                         >
                           <CircularTimer progress={0} size={idleTimerSize} showTicks={true} color="transparent" />
                         </div>
@@ -816,8 +801,11 @@ export default function App() {
                     <div className={`${currentMode.id === 'custom' ? 'relative' : 'absolute inset-0'} flex flex-col items-center justify-center`}>
                         {currentMode.id === 'custom' ? (
                             <div 
-                              className="transition-all duration-500 ease-out"
-                              style={{ transform: `scale(${timerScale})` }}
+                              className={`${transitionClass} ease-out`}
+                              style={{ 
+                                  transform: isAnimating ? 'scale(1.2)' : 'scale(1)',
+                                  opacity: isAnimating ? 0 : 1
+                              }}
                             >
                               <WheelPicker 
                                   value={customDuration}
@@ -828,8 +816,11 @@ export default function App() {
                             </div>
                         ) : (
                             <div 
-                              className="flex flex-col items-center justify-center select-none transition-all duration-500 ease-out"
-                              style={{ transform: `scale(${timerScale})` }}
+                              className={`flex flex-col items-center justify-center select-none ${transitionClass} ease-out`}
+                              style={{ 
+                                  transform: isAnimating ? 'scale(1.2)' : 'scale(1)',
+                                  opacity: isAnimating ? 0 : 1
+                              }}
                             >
                                 <div className="text-[72px] leading-none font-thin text-white tracking-tighter tabular-nums drop-shadow-lg">
                                     {displayDuration}
@@ -842,10 +833,13 @@ export default function App() {
                     </div>
                 </div>
 
-                {/* 底部控制区域 */}
+                {/* 底部控制区域 - 向下位移淡出 */}
                 <div 
-                  className="pb-16 flex flex-col items-center justify-center w-full relative z-20 transition-all duration-500"
-                  style={{ opacity: uiOpacity }}
+                  className={`pb-16 flex flex-col items-center justify-center w-full relative z-20 ${transitionClass}`}
+                  style={{ 
+                      opacity: isAnimating ? 0 : 1,
+                      transform: isAnimating ? 'translateY(20px)' : 'translateY(0)'
+                  }}
                 >
                     
                     <div className="text-white/70 text-sm font-light mb-8">
@@ -873,11 +867,9 @@ export default function App() {
                     <div className="flex items-center justify-center w-full">
                         <button 
                             onClick={startTimer}
-                            className="w-20 h-20 bg-white rounded-full flex items-center justify-center transition-all duration-300 active:scale-95 group relative hover:scale-105"
+                            className={`w-20 h-20 bg-white rounded-full flex items-center justify-center transition-all duration-300 active:scale-95 group relative hover:scale-105 ${isAnimating ? 'scale-75 opacity-0' : ''}`}
                             style={{ 
                               boxShadow: `0 0 40px ${currentMode.themeColor}50`,
-                              opacity: uiOpacity,
-                              transform: `scale(${isAnimating ? 0.9 : 1})`
                             }}
                             disabled={isAnimating}
                         >
