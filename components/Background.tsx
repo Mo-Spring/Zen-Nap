@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { NapMode } from '../types';
 
@@ -11,7 +12,7 @@ export const Background: React.FC<BackgroundProps> = ({ activeModeId, modes }) =
   const activeColor = modes.find(m => m.id === activeModeId)?.themeColor || '#000000';
 
   return (
-    <div className="fixed -inset-[50px] z-0 bg-black">
+    <div className="fixed -inset-[100px] z-0 bg-black">
       {/* 
         性能优化：预渲染所有模式的背景图片层叠在一起。
         通过切换 opacity 来实现丝滑的 Cross-fade 效果，
