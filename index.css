@@ -4,6 +4,17 @@
 @tailwind utilities;
 
 @layer base {
+  /* 在全局 CSS 中添加 */
+  * {
+    box-sizing: border-box;
+  }
+
+  html, body, #root {
+    margin: 0;
+    padding: 0;
+    overflow: visible !important;
+  }
+
   body {
     font-family: 'Inter', sans-serif;
     overscroll-behavior: none;
