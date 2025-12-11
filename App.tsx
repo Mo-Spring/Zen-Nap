@@ -92,6 +92,8 @@ export default function App() {
   // Settings State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [snoozeDuration, setSnoozeDuration] = useState(5);
+  // 贪睡状态
+  const [isSnoozing, setIsSnoozing] = useState(false);
 
   // Music State
   const [globalWakeUpMusic, setGlobalWakeUpMusic] = useState<MusicTrack | null>(null);
@@ -148,6 +150,9 @@ export default function App() {
                 setGlobalRefreshMusic(settings.music.refresh || null);
                 setModeGuideMusic(settings.music.guides || {});
             }
+            if (settings.snoozeDuration) {
+                setSnoozeDuration(settings.snoozeDuration);
+            }
         } catch (e) {
             console.error("Failed to parse settings from localStorage", e);
         }
@@ -156,6 +161,7 @@ export default function App() {
 
   useEffect(() => {
     const settings = {
+        snoozeDuration,
         music: {
             wakeUp: globalWakeUpMusic,
             refresh: globalRefreshMusic,
@@ -163,7 +169,7 @@ export default function App() {
         }
     };
     localStorage.setItem('zenNapSettings', JSON.stringify(settings));
-  }, [globalWakeUpMusic, globalRefreshMusic, modeGuideMusic]);
+  }, [globalWakeUpMusic, globalRefreshMusic, modeGuideMusic, snoozeDuration]);
 
   // 计时器逻辑
   useEffect(() => {
@@ -358,6 +364,7 @@ export default function App() {
   const startTimer = () => {
     if (isAnimating || appState !== AppState.IDLE) return;
     setIsAnimating(true);
+    setIsSnoozing(false); // 正常开始时，重置贪睡状态
     // Use setTimeout to match the CSS transition duration
     setTimeout(() => {
         startTimerInternal(displayDuration); // 传入当前选择的模式时长
@@ -381,6 +388,7 @@ export default function App() {
     // Set initial state for "enter" animation (hidden state)
     setIsAnimating(true);
     setIsStopping(false);
+    setIsSnoozing(false); // 停止时重置贪睡状态
     
     setAppState(AppState.IDLE);
     setSessionStats(null);
@@ -418,6 +426,7 @@ export default function App() {
 
   const handleSnooze = () => {
     stopAllAudio(); // 用户点击再睡一会，停止当前音乐
+    setIsSnoozing(true); // 标记为贪睡状态
     startTimerInternal(snoozeDuration); // 使用贪睡时长启动计时
     setSlideY(0);
   };
@@ -612,9 +621,9 @@ export default function App() {
     >
       <Background color={currentMode.themeColor} image={currentMode.bgImage} />
       
-      {/* 背景模糊层 - 修改：计时状态下保持30px模糊 */}
+      {/* 背景模糊层 - 修改：计时状态下保持30px模糊，扩大范围至-100px防止边缘瑕疵 */}
       <div 
-        className={`${transitionClass} fixed -inset-10 z-5`}
+        className={`${transitionClass} fixed -inset-[100px] z-5`}
         style={{ 
           backdropFilter: `blur(${isAnimating || appState === AppState.RUNNING ? 30 : 0}px)`,
           WebkitBackdropFilter: `blur(${isAnimating || appState === AppState.RUNNING ? 30 : 0}px)`,
@@ -925,7 +934,10 @@ export default function App() {
              }}
         >
             <div className="pt-12 px-6 flex justify-center items-center text-white/80">
-                <div className="text-lg font-light tracking-wide opacity-80">{currentMode.name.split(' ')[0]}</div>
+                <div className="text-lg font-light tracking-wide opacity-80">
+                    {/* 根据状态显示不同标题 */}
+                    {isSnoozing ? '再睡一会' : currentMode.name.split(' ')[0]}
+                </div>
             </div>
 
             <div className="flex-1 flex flex-col items-center justify-center">
