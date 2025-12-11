@@ -38,7 +38,22 @@
   animation: sound-wave 1s ease-in-out infinite;
 }
 
-/* 添加到 index.css */
+/* 渐显动画：透明度从0到1，配合微小的放大效果，模拟iOS页面浮现感 */
+@keyframes fade-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.8s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+
 @keyframes scale-in {
   from {
     transform: scale(0.95);
