@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect } from 'react';
 
 interface WheelPickerProps {
   value: number;
@@ -9,43 +9,126 @@ interface WheelPickerProps {
 
 export const WheelPicker: React.FC<WheelPickerProps> = ({ value, min, max, onChange }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [scrollTop, setScrollTop] = useState(0);
-  
+  const itemsRef = useRef<(HTMLDivElement | null)[]>([]);
+  const isInternalScroll = useRef(false);
+
   // 配置参数
   const ITEM_HEIGHT = 60; // 单个数字高度
   const CONTAINER_HEIGHT = 300; // 容器总高度
-  // VISIBLE_ITEMS removed as it was unused and causing build errors
   
   // 生成数字范围
   const range = Array.from({ length: max - min + 1 }, (_, i) => i + min);
 
-  // 初始化滚动位置
-  useEffect(() => {
-    if (containerRef.current) {
-      const initialIndex = value - min;
-      const targetScroll = initialIndex * ITEM_HEIGHT;
-      // 只有当偏差较大时才调整，避免微小抖动
-      if (Math.abs(containerRef.current.scrollTop - targetScroll) > 1) {
-        containerRef.current.scrollTop = targetScroll;
-        setScrollTop(targetScroll);
-      }
-    }
-  }, []); // 仅挂载时执行一次定位，后续由滚动事件接管
+  // 核心视觉更新逻辑：直接操作DOM，不通过React渲染流
+  const updateVisuals = () => {
+    const container = containerRef.current;
+    if (!container) return;
 
-  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    const currentScrollTop = e.currentTarget.scrollTop;
-    setScrollTop(currentScrollTop);
+    const scrollTop = container.scrollTop;
+    const centerOffset = CONTAINER_HEIGHT / 2;
 
-    // 计算当前选中的索引
-    // 容器中心点在滚动内容中的位置 = currentScrollTop + 容器高度一半
-    // 实际上由于Padding的存在，我们只需要计算偏移
-    const selectedIndex = Math.round(currentScrollTop / ITEM_HEIGHT);
-    const newValue = Math.min(max, Math.max(min, min + selectedIndex));
+    range.forEach((_, index) => {
+        const item = itemsRef.current[index];
+        if (!item) return;
 
-    if (newValue !== value) {
-      onChange(newValue);
-    }
+        // 计算每一项相对于视口中心的位置
+        const itemCenterY = index * ITEM_HEIGHT + ITEM_HEIGHT / 2;
+        const scrollCenterY = scrollTop + centerOffset;
+        const distance = Math.abs(scrollCenterY - itemCenterY);
+        
+        // 视觉衰减的最大距离
+        const maxDistance = CONTAINER_HEIGHT / 2;
+        const normalizedDistance = Math.min(1, distance / maxDistance);
+
+        // 3D效果计算
+        const scale = 1.0 - (normalizedDistance * 0.45); // 1.0 -> 0.55
+        const opacity = 1.0 - (normalizedDistance * 0.7); // 1.0 -> 0.3
+        const rotateX = normalizedDistance * 50 * (itemCenterY < scrollCenterY ? 1 : -1);
+
+        // 直接应用样式，避免React Re-render带来的开销
+        item.style.transform = `scale(${scale}) perspective(500px) rotateX(${rotateX}deg)`;
+        item.style.opacity = opacity.toFixed(2);
+        
+        // 字体样式切换
+        const span = item.firstElementChild as HTMLElement;
+        if (span) {
+            if (distance < ITEM_HEIGHT / 2) {
+                // 选中状态
+                if (span.dataset.active !== 'true') {
+                    span.style.fontSize = '64px';
+                    span.style.color = '#ffffff';
+                    span.style.fontWeight = '400';
+                    span.dataset.active = 'true';
+                }
+            } else {
+                // 非选中状态
+                if (span.dataset.active !== 'false') {
+                    span.style.fontSize = '32px';
+                    span.style.color = 'rgba(255, 255, 255, 0.5)';
+                    span.style.fontWeight = '300';
+                    span.dataset.active = 'false';
+                }
+            }
+        }
+    });
   };
+
+  // 处理外部 value 变化 (例如初始化或重置)
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const currentScroll = container.scrollTop;
+    const targetScroll = (value - min) * ITEM_HEIGHT;
+
+    // 如果当前滚动位置和目标位置差异较大，且不是由内部滚动触发的，则强制同步位置
+    // 添加一个容差，避免微小的计算差异导致死循环
+    if (!isInternalScroll.current && Math.abs(currentScroll - targetScroll) > 1) {
+        container.scrollTop = targetScroll;
+        // 立即更新一次视觉状态
+        requestAnimationFrame(updateVisuals);
+    }
+    
+    // 重置标志位
+    isInternalScroll.current = false;
+  }, [value, min]);
+
+  // 绑定滚动事件
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    // 初始化视觉状态
+    updateVisuals();
+
+    let rAFId: number;
+
+    const handleScroll = () => {
+        isInternalScroll.current = true;
+        
+        // 使用 requestAnimationFrame 保证在每一帧进行视觉更新
+        cancelAnimationFrame(rAFId);
+        rAFId = requestAnimationFrame(() => {
+            updateVisuals();
+
+            // 计算选中值并通知父组件
+            const currentScroll = container.scrollTop;
+            const selectedIndex = Math.round(currentScroll / ITEM_HEIGHT);
+            const newValue = Math.min(max, Math.max(min, min + selectedIndex));
+
+            if (newValue !== value) {
+                onChange(newValue);
+            }
+        });
+    };
+
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    
+    return () => {
+        container.removeEventListener('scroll', handleScroll);
+        cancelAnimationFrame(rAFId);
+    };
+  }, [value, min, max, onChange]); // 依赖项包含回调和范围
 
   return (
     <div className="relative w-[260px] h-[300px] flex items-center justify-center overflow-hidden">
@@ -56,9 +139,6 @@ export const WheelPicker: React.FC<WheelPickerProps> = ({ value, min, max, onCha
       {/* 底部渐变遮罩 */}
       <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-black/90 via-black/40 to-transparent z-20 pointer-events-none" />
 
-      {/* 选中项指示器 (可选，目前设计依靠字体大小区分，所以这里只留一个极淡的线条或留空) */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-[60px] border-y border-white/5 z-10 pointer-events-none" />
-
       {/* 固定的单位标签 */}
       <div className="absolute right-8 top-1/2 -translate-y-1/2 mt-2 z-30 pointer-events-none opacity-60">
         <span className="text-sm font-medium text-white tracking-widest">分钟</span>
@@ -67,60 +147,31 @@ export const WheelPicker: React.FC<WheelPickerProps> = ({ value, min, max, onCha
       <div 
         ref={containerRef}
         className="w-full h-full overflow-y-auto no-scrollbar snap-y snap-mandatory scroll-smooth"
-        onScroll={handleScroll}
         style={{
           // 利用 padding 让第一个和最后一个元素能居中
           paddingTop: (CONTAINER_HEIGHT - ITEM_HEIGHT) / 2,
           paddingBottom: (CONTAINER_HEIGHT - ITEM_HEIGHT) / 2,
         }}
       >
-        {range.map((num) => {
-          // 计算当前数字距离中心的距离
-          const itemOffset = (num - min) * ITEM_HEIGHT;
-          const distance = Math.abs(scrollTop - itemOffset);
-          
-          // 视觉计算逻辑：距离中心越近，越大越亮
-          // maxDistance 约为容器一半高度
-          const maxDistance = CONTAINER_HEIGHT / 2;
-          
-          // 归一化距离 (0 = 中心, 1 = 边缘)
-          let normalizedDistance = Math.min(1, distance / maxDistance);
-          
-          // 缩放计算：中心 1.0，边缘 0.6
-          const scale = 1.0 - (normalizedDistance * 0.5); 
-          
-          // 透明度计算：中心 1.0，边缘 0.2
-          const opacity = 1.0 - (normalizedDistance * 0.8);
-          
-          // 旋转计算：模拟滚轮的 X 轴旋转效果
-          const rotateX = normalizedDistance * 45 * (scrollTop > itemOffset ? -1 : 1);
-
-          // 字体大小：根据选中状态剧烈变化
-          const isSelected = distance < ITEM_HEIGHT / 2;
-
-          return (
-            <div 
-              key={num}
-              className="w-full flex items-center justify-center snap-center"
-              style={{
-                height: `${ITEM_HEIGHT}px`,
-                transform: `scale(${scale}) perspective(500px) rotateX(${rotateX}deg)`,
-                opacity: opacity,
-                transition: 'transform 0.1s ease-out, opacity 0.1s ease-out'
-              }}
+        {range.map((num, i) => (
+          <div 
+            key={num}
+            ref={(el) => { itemsRef.current[i] = el; }}
+            className="w-full flex items-center justify-center snap-center will-change-transform"
+            style={{
+              height: `${ITEM_HEIGHT}px`,
+              // 初始样式，防止JS执行前的闪烁
+              transformOrigin: 'center center',
+            }}
+          >
+            <span 
+                className="font-light text-[32px] text-white/50 transition-colors duration-0"
+                data-active="false"
             >
-              <span 
-                className={`font-light tabular-nums tracking-tighter transition-all duration-200 ${
-                  isSelected 
-                    ? 'text-[64px] text-white font-normal drop-shadow-lg' 
-                    : 'text-[32px] text-white/50'
-                }`}
-              >
-                {num}
-              </span>
-            </div>
-          );
-        })}
+              {num}
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   );
