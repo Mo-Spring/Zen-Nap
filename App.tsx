@@ -370,9 +370,12 @@ export default function App() {
         animationFrameRef.current = null;
     }
     if (stopIntervalRef.current) {
-        clearInterval(stopIntervalRef.current);
+        cancelAnimationFrame(stopIntervalRef.current);
         stopIntervalRef.current = null;
     }
+
+    // Reset progress to prevent "full bar" on next render
+    setStopProgress(0);
     
     // Set initial state for "enter" animation (hidden state)
     setIsAnimating(true);
@@ -423,17 +426,16 @@ export default function App() {
     const startTime = Date.now();
     const DURATION = 1500; // 长按时间，1.5秒
 
-    stopIntervalRef.current = window.setInterval(() => {
+    const tick = () => {
         const elapsed = Date.now() - startTime;
         const progress = Math.min(elapsed / DURATION, 1);
         setStopProgress(progress);
 
-        if (progress >= 1) {
+        if (progress < 1) {
+            stopIntervalRef.current = requestAnimationFrame(tick);
+        } else {
             // 长按完成
-            if (stopIntervalRef.current) {
-                clearInterval(stopIntervalRef.current);
-                stopIntervalRef.current = null;
-            }
+            stopIntervalRef.current = null;
             // 触发退出动画
             setIsStopping(true);
             // 等待动画完成后切换状态
@@ -441,13 +443,15 @@ export default function App() {
                 stopTimer();
             }, 500); // 500ms 对应 CSS transition duration
         }
-    }, 16);
+    };
+
+    stopIntervalRef.current = requestAnimationFrame(tick);
   };
 
   const handleStopPressEnd = () => {
     // 只有在没有进入 stopping 状态时才取消
     if (!isStopping && stopIntervalRef.current) {
-        clearInterval(stopIntervalRef.current);
+        cancelAnimationFrame(stopIntervalRef.current);
         stopIntervalRef.current = null;
         setStopProgress(0);
     }
@@ -959,7 +963,6 @@ export default function App() {
                             strokeDasharray={2 * Math.PI * 42}
                             strokeDashoffset={2 * Math.PI * 42 * (1 - stopProgress)}
                             strokeLinecap="round"
-                            className="transition-all duration-75 ease-linear"
                         />
                     </svg>
 
