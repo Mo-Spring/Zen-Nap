@@ -155,7 +155,7 @@ export default function App() {
                 setModeGuideMusic(settings.music.guides || {});
             }
             if (settings.snoozeDuration) {
-                setSnoozeDuration(settings.snoozeDuration);
+                setSnoozeDuration(Number(settings.snoozeDuration) || 5);
             }
         } catch (e) {
             console.error("Failed to parse settings from localStorage", e);
@@ -785,7 +785,7 @@ export default function App() {
         <div className="flex flex-col h-full relative z-10">
             {/* 顶部栏 - 向上位移淡出 */}
             <div 
-              className={`pt-12 px-6 flex justify-between items-center text-white/80 relative z-40 ${transitionClass}`}
+              className={`pt-8 px-6 flex justify-between items-center text-white/80 relative z-40 ${transitionClass}`}
               style={{ 
                   transform: isAnimating ? 'translateY(-60px)' : 'translateY(0)',
                   opacity: isAnimating ? 0 : 1
@@ -812,7 +812,7 @@ export default function App() {
             >
                 <div 
                     ref={scrollContainerRef}
-                    className="mt-8 flex overflow-x-auto space-x-2 px-4 pb-4 no-scrollbar relative items-center"
+                    className="mt-14 flex overflow-x-auto space-x-2 px-4 pb-4 no-scrollbar relative items-center"
                     style={{ maskImage: 'linear-gradient(to right, transparent, black 5%, black 95%, transparent)' }}
                 >
                     {/* Active Indicator - Light Ball Effect */}
