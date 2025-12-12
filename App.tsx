@@ -229,7 +229,8 @@ export default function App() {
                 });
 
                 // 注册 App 状态变化监听（后台 -> 前台）
-                CapacitorApp.addListener('appStateChange', ({ isActive }) => {
+                // Explicitly type isActive to fix build error
+                CapacitorApp.addListener('appStateChange', ({ isActive }: { isActive: boolean }) => {
                     if (isActive) {
                         checkSessionState();
                     }
