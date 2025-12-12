@@ -152,6 +152,13 @@ export default function App() {
   const touchStartX = useRef<number | null>(null);
   const touchEndX = useRef<number | null>(null);
   const isDragging = useRef(false);
+
+  // State Refs for Event Listeners
+  const appStateRef = useRef(appState);
+  const isSettingsOpenRef = useRef(isSettingsOpen);
+  
+  useEffect(() => { appStateRef.current = appState; }, [appState]);
+  useEffect(() => { isSettingsOpenRef.current = isSettingsOpen; }, [isSettingsOpen]);
   
   const currentMode = MODES[selectedModeIndex];
   const displayDuration = currentMode.id === 'custom' ? customDuration : currentMode.durationMinutes;
@@ -229,12 +236,38 @@ export default function App() {
                 });
 
                 // 注册 App 状态变化监听（后台 -> 前台）
-                // Explicitly type isActive to fix build error
                 CapacitorApp.addListener('appStateChange', ({ isActive }: { isActive: boolean }) => {
                     if (isActive) {
                         checkSessionState();
                     }
                 });
+
+                // 处理物理返回键
+                CapacitorApp.addListener('backButton', () => {
+                    if (isSettingsOpenRef.current) {
+                        setIsSettingsOpen(false);
+                        return;
+                    }
+                    
+                    if (appStateRef.current === AppState.RUNNING) {
+                        // 倒计时中，按返回键最小化应用，保持后台运行
+                        CapacitorApp.minimizeApp();
+                        return;
+                    }
+                    
+                    // 首页或总结页，退出应用
+                    if (appStateRef.current === AppState.IDLE || appStateRef.current === AppState.SUMMARY) {
+                        CapacitorApp.exitApp();
+                        return;
+                    }
+
+                    // 闹钟页面，最小化
+                    if (appStateRef.current === AppState.ALARM) {
+                        CapacitorApp.minimizeApp();
+                        return;
+                    }
+                });
+
             } catch (err) {
                 console.warn('Native init failed', err);
             }
@@ -563,8 +596,9 @@ export default function App() {
   const startTimer = () => {
     if (isAnimating || appState !== AppState.IDLE) return;
     
-    // Warm-up audio
-    if (audioRef.current) {
+    // Warm-up audio: Only play/pause to unlock audio context IF NO MUSIC IS PLAYING.
+    // If music is already playing (guide music), we let it continue playing during the nap.
+    if (audioRef.current && audioRef.current.paused) {
         audioRef.current.play().then(() => {
             audioRef.current!.pause();
         }).catch(e => console.warn("Audio warm-up failed", e));
