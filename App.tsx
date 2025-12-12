@@ -9,6 +9,7 @@ import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { LocalNotifications } from '@capacitor/local-notifications';
+import { App as CapacitorApp } from '@capacitor/app';
 
 // --- DATA ---
 const MODES: NapMode[] = [
@@ -64,6 +65,15 @@ interface MusicTrack {
   path: string;
 }
 
+// Persisted Session Data Type
+interface PersistedSession {
+    startTime: number; // timestamp
+    endTime: number;   // timestamp
+    durationMinutes: number;
+    modeIndex: number;
+    isSnoozing: boolean;
+}
+
 const fileToBase64 = (file: File): Promise<string> =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -112,7 +122,6 @@ export default function App() {
   const [startTime, setStartTime] = useState<Date | null>(null);
   const [sessionStats, setSessionStats] = useState<SessionStats | null>(null);
   
-  // 新增：修复缺失的状态变量
   const [activeUploadContext, setActiveUploadContext] = useState<{
       field: 'wakeUp' | 'refresh' | 'guide';
       modeId?: string;
@@ -132,8 +141,11 @@ export default function App() {
   const audioRef = useRef<HTMLAudioElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const intervalRef = useRef<any>(null); // Use any for NodeJS/Window timer type compatibility
   const stopIntervalRef = useRef<number | null>(null);
   const modeButtonsRef = useRef<(HTMLButtonElement | null)[]>([]);
+  // Wake Lock Ref
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
   
   // Gesture Refs
   const dragStartY = useRef<number | null>(null);
@@ -144,29 +156,128 @@ export default function App() {
   const currentMode = MODES[selectedModeIndex];
   const displayDuration = currentMode.id === 'custom' ? customDuration : currentMode.durationMinutes;
 
+  // --- WAKE LOCK HANDLERS ---
+  const requestWakeLock = async () => {
+    if ('wakeLock' in navigator) {
+      try {
+        wakeLockRef.current = await navigator.wakeLock.request('screen');
+      } catch (err: any) {
+        console.error(`${err.name}, ${err.message}`);
+      }
+    }
+  };
+
+  const releaseWakeLock = async () => {
+    if (wakeLockRef.current) {
+      try {
+        await wakeLockRef.current.release();
+        wakeLockRef.current = null;
+      } catch (err: any) {
+         console.error(`${err.name}, ${err.message}`);
+      }
+    }
+  };
+
+  // --- PERSISTENCE HELPERS ---
+  const saveSessionToStorage = (end: Date, duration: number, modeIdx: number, snoozing: boolean) => {
+      const sessionData: PersistedSession = {
+          startTime: Date.now(),
+          endTime: end.getTime(),
+          durationMinutes: duration,
+          modeIndex: modeIdx,
+          isSnoozing: snoozing
+      };
+      localStorage.setItem('ACTIVE_NAP_SESSION', JSON.stringify(sessionData));
+  };
+
+  const clearSessionFromStorage = () => {
+      localStorage.removeItem('ACTIVE_NAP_SESSION');
+  };
+
   // --- EFFECTS ---
 
   useEffect(() => {
     // 沉浸式状态栏设置
     if (Capacitor.isNativePlatform()) {
-        const initStatusBar = async () => {
+        const initNative = async () => {
             try {
                 // 让 WebView 延伸到状态栏下方
                 await StatusBar.setOverlaysWebView({ overlay: true });
-                // 设置状态栏文字为浅色（适应深色背景）
                 await StatusBar.setStyle({ style: Style.Dark }); 
-                // 设置状态栏背景为透明
                 await StatusBar.setBackgroundColor({ color: '#00000000' });
+                
+                await LocalNotifications.requestPermissions();
+
+                // 核心：创建高权限通知渠道，对齐截图中的权限
+                await LocalNotifications.createChannel({
+                    id: 'zen_nap_alarm_channel',
+                    name: 'Zen Nap Alarm',
+                    description: 'Notifications for nap completion',
+                    importance: 5, // High Importance (Heads-up display, Sound)
+                    visibility: 1, // Public (Show full content on lock screen)
+                    vibration: true, // 震动权限
+                    lights: true, // 呼吸灯权限
+                    lightColor: '#FFFFFF',
+                    sound: 'default' // 发声权限
+                });
+
+                // 注册通知点击事件监听
+                LocalNotifications.addListener('localNotificationActionPerformed', (notification) => {
+                    // 用户点击了通知，我们需要立即检查状态并可能跳转
+                    console.log('Notification clicked', notification);
+                    checkSessionState();
+                });
+
+                // 注册 App 状态变化监听（后台 -> 前台）
+                CapacitorApp.addListener('appStateChange', ({ isActive }) => {
+                    if (isActive) {
+                        checkSessionState();
+                    }
+                });
             } catch (err) {
-                console.warn('StatusBar config failed', err);
+                console.warn('Native init failed', err);
             }
         };
-        initStatusBar();
-        
-        // Request Notification Permissions
-        LocalNotifications.requestPermissions();
+        initNative();
     }
-  }, []);
+
+    // 初始加载时检查是否有未完成的会话
+    checkSessionState();
+  }, []); // Run once on mount
+
+  // 核心状态检查逻辑：用于恢复状态或触发闹钟
+  const checkSessionState = () => {
+    const savedSession = localStorage.getItem('ACTIVE_NAP_SESSION');
+    if (!savedSession) return;
+
+    try {
+        const session: PersistedSession = JSON.parse(savedSession);
+        const now = Date.now();
+        
+        // 恢复基本状态
+        setSelectedModeIndex(session.modeIndex);
+        setActiveDuration(session.durationMinutes);
+        setIsSnoozing(session.isSnoozing);
+        setEndTime(new Date(session.endTime));
+        setStartTime(new Date(session.startTime));
+        
+        // 如果时间已经到了
+        if (now >= session.endTime) {
+            console.log("Session expired while backgrounded/killed. Triggering ALARM.");
+            finishTimer(true); // true = restored from background
+        } else {
+            // 时间还没到，恢复 RUNNING 状态
+            console.log("Restoring RUNNING session.");
+            setAppState(AppState.RUNNING);
+            const remainingSec = Math.floor((session.endTime - now) / 1000);
+            setTimeLeft(remainingSec);
+            requestWakeLock();
+        }
+    } catch (e) {
+        console.error("Failed to parse saved session", e);
+        clearSessionFromStorage();
+    }
+  };
 
   useEffect(() => {
     const savedSettings = localStorage.getItem('zenNapSettings');
@@ -215,28 +326,33 @@ export default function App() {
 
   // 计时器逻辑
   useEffect(() => {
-    if (appState === AppState.RUNNING && startTime && timeLeft > 0 && activeDuration > 0) {
-      const updateTimer = () => {
-        if (!startTime) {
-          finishTimer();
-          return;
-        }
+    if (appState === AppState.RUNNING && startTime && activeDuration > 0) {
+      
+      const checkTimer = () => {
+        if (!endTime) return; // Should allow finishTimer to be called via endTime check
         
         const now = Date.now();
-        const elapsedSeconds = Math.floor((now - startTime.getTime()) / 1000);
-        const totalDurationSeconds = activeDuration * 60; // 使用 activeDuration 计算剩余时间
-        const remaining = Math.max(0, totalDurationSeconds - elapsedSeconds);
+        // 优先使用 Date 对象计算剩余时间，避免 setInterval 的误差累积
+        const remainingSeconds = Math.floor((endTime.getTime() - now) / 1000);
         
-        setTimeLeft(remaining);
+        setTimeLeft(Math.max(0, remainingSeconds));
         
-        if (remaining <= 0) {
+        if (remainingSeconds <= 0) {
           finishTimer();
-        } else {
-          animationFrameRef.current = requestAnimationFrame(updateTimer);
         }
       };
-      
-      animationFrameRef.current = requestAnimationFrame(updateTimer);
+
+      // 1. 高频动画循环 (前景使用)
+      const loop = () => {
+        checkTimer();
+        if (appState === AppState.RUNNING) {
+           animationFrameRef.current = requestAnimationFrame(loop);
+        }
+      };
+      animationFrameRef.current = requestAnimationFrame(loop);
+
+      // 2. 低频 Interval (后台/锁屏兜底)
+      intervalRef.current = setInterval(checkTimer, 1000);
     }
     
     return () => {
@@ -244,9 +360,12 @@ export default function App() {
         cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
       }
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
     };
-  }, [appState, startTime, activeDuration]); // 依赖项改为 activeDuration
-
+  }, [appState, startTime, endTime, activeDuration]); // Added endTime
 
   // --- AUDIO HANDLERS ---
   
@@ -258,9 +377,8 @@ export default function App() {
           return;
       }
 
+      // 如果已经在播放这首歌，就不重头开始了
       if (playingAudioPath === trackPath && !audioRef.current.paused) {
-          audioRef.current.pause();
-          setPlayingAudioPath(null);
           return;
       }
 
@@ -272,17 +390,22 @@ export default function App() {
       audioRef.current.src = audioSrc;
       audioRef.current.load();
       
-      audioRef.current.play()
-          .then(() => {
-              setPlayingAudioPath(trackPath);
-          })
-          .catch(e => {
-              console.error("Error playing audio:", e);
-              setPlayingAudioPath(null);
-          });
+      const playPromise = audioRef.current.play();
+      if (playPromise !== undefined) {
+        playPromise
+            .then(() => {
+                setPlayingAudioPath(trackPath);
+            })
+            .catch(e => {
+                console.error("Error playing audio:", e);
+                // 自动播放策略可能会阻止播放，
+                // 但如果是用户点击操作触发的，通常允许。
+                // 如果是后台恢复触发的，可能需要再次交互。
+                setPlayingAudioPath(null);
+            });
+      }
   };
 
-  // 停止所有音频
   const stopAllAudio = () => {
     if (audioRef.current) {
       audioRef.current.pause();
@@ -377,7 +500,7 @@ export default function App() {
   };
 
   const startTimerInternal = async (durationMinutes: number) => {
-    setActiveDuration(durationMinutes); // 设置当前激活的时长
+    setActiveDuration(durationMinutes);
     const durationSec = durationMinutes * 60;
     
     setTimeLeft(durationSec);
@@ -385,6 +508,9 @@ export default function App() {
     const end = new Date(now.getTime() + durationSec * 1000);
     setStartTime(now);
     setEndTime(end);
+
+    // 持久化保存状态
+    saveSessionToStorage(end, durationMinutes, selectedModeIndex, isSnoozing);
     
     if (!sessionStats) {
         setSessionStats({
@@ -401,23 +527,30 @@ export default function App() {
     }
     
     setAppState(AppState.RUNNING);
+    await requestWakeLock();
 
-    // Schedule Local Notification for background/lock screen alarm
+    // Schedule Native Notification
     if (Capacitor.isNativePlatform()) {
         try {
-            // Cancel any pending notifications first to be safe
             await LocalNotifications.cancel({ notifications: [{ id: 1 }] });
             
-            // Schedule new notification
             await LocalNotifications.schedule({
                 notifications: [{
                     title: "小憩结束",
                     body: "时间到了，该起床了",
                     id: 1,
-                    schedule: { at: end },
-                    sound: undefined, // Uses default system sound
-                    actionTypeId: "",
-                    extra: null
+                    // 使用 allowWhileIdle 确保在 Doze 模式下也能触发
+                    schedule: { at: end, allowWhileIdle: true },
+                    sound: undefined, // 使用通道默认声音
+                    actionTypeId: "NAP_FINISHED",
+                    extra: {
+                        modeId: currentMode.id
+                    },
+                    channelId: 'zen_nap_alarm_channel',
+                    // 常驻通知权限：设置为 ongoing 且不自动取消
+                    ongoing: true,
+                    autoCancel: false,
+                    // 注意：visibility 和 priority 在 schedule 中不直接生效，需依赖 Channel 配置
                 }]
             });
         } catch (e) {
@@ -428,13 +561,20 @@ export default function App() {
 
   const startTimer = () => {
     if (isAnimating || appState !== AppState.IDLE) return;
+    
+    // Warm-up audio
+    if (audioRef.current) {
+        audioRef.current.play().then(() => {
+            audioRef.current!.pause();
+        }).catch(e => console.warn("Audio warm-up failed", e));
+    }
+
     setIsAnimating(true);
-    setIsSnoozing(false); // 正常开始时，重置贪睡状态
-    // Use setTimeout to match the CSS transition duration
+    if (!isSnoozing) setIsSnoozing(false); 
     setTimeout(() => {
-        startTimerInternal(displayDuration); // 传入当前选择的模式时长
+        startTimerInternal(displayDuration);
         setIsAnimating(false);
-    }, 700); // Reverted to 700ms to match the snappier CSS transition
+    }, 700);
   };
 
   const stopTimer = async () => {
@@ -442,10 +582,17 @@ export default function App() {
         cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
     }
+    if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+    }
     if (stopIntervalRef.current) {
         cancelAnimationFrame(stopIntervalRef.current);
         stopIntervalRef.current = null;
     }
+
+    // Clear Persistence
+    clearSessionFromStorage();
 
     // Cancel Notification
     if (Capacitor.isNativePlatform()) {
@@ -456,24 +603,20 @@ export default function App() {
         }
     }
 
-    // Reset progress to prevent "full bar" on next render
+    await releaseWakeLock();
+
     setStopProgress(0);
-    
-    // Set initial state for "enter" animation (hidden state)
     setIsAnimating(true);
     setIsStopping(false);
-    setIsSnoozing(false); // 停止时重置贪睡状态
+    setIsSnoozing(false);
     
     setAppState(AppState.IDLE);
     setSessionStats(null);
     setStartTime(null);
     setEndTime(null);
-    setActiveDuration(0); // 重置活动时长
+    setActiveDuration(0);
     stopAllAudio();
 
-    // Trigger transition to visible state
-    // Double requestAnimationFrame ensures that the DOM has updated with the initial (hidden) state
-    // before we switch to the final (visible) state, allowing the CSS transition to play.
     requestAnimationFrame(() => {
         requestAnimationFrame(() => {
             setIsAnimating(false);
@@ -481,37 +624,52 @@ export default function App() {
     });
   };
 
-  const finishTimer = async () => {
+  const finishTimer = async (isRestored = false) => {
+    // 如果已经在 Alarm 状态，不要重复触发（防止多次渲染或逻辑冲突）
+    // 除非是强制恢复（isRestored）
+    if (appState === AppState.ALARM && !isRestored) return;
+
     if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
     }
+    if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+    }
 
-    // Cancel Notification (if user has app open, we don't want system notification to linger if we handle it here)
-    if (Capacitor.isNativePlatform()) {
+    // 清除持久化（因为已经完成了）
+    clearSessionFromStorage();
+    await releaseWakeLock();
+
+    if (Capacitor.isNativePlatform() && !isRestored) {
+        // 如果我们是“前台”正常结束的，取消那个备用的后台通知，避免重复响铃
         try {
             await LocalNotifications.cancel({ notifications: [{ id: 1 }] });
-        } catch (e) {
-            console.error("Failed to cancel notification on finish", e);
+        } catch (e) { console.error(e); }
+        
+        if ('vibrate' in navigator) {
+            navigator.vibrate([1000, 500, 1000]);
         }
     }
 
     setAppState(AppState.ALARM);
-    // 播放唤醒音乐
+    
+    // 确保有声音路径
     if (globalWakeUpMusic?.path) {
       playAudio(globalWakeUpMusic.path);
     }
   };
 
   const completeSession = () => {
-    stopAllAudio(); // 用户操作，停止音乐
+    stopAllAudio();
     setAppState(AppState.SUMMARY);
   };
 
   const handleSnooze = () => {
-    stopAllAudio(); // 用户点击再睡一会，停止当前音乐
-    setIsSnoozing(true); // 标记为贪睡状态
-    startTimerInternal(snoozeDuration); // 使用贪睡时长启动计时
+    stopAllAudio();
+    setIsSnoozing(true);
+    startTimerInternal(snoozeDuration);
     setSlideY(0);
   };
 
@@ -519,7 +677,7 @@ export default function App() {
   const handleStopPressStart = () => {
     if (stopIntervalRef.current || isAnimating || isStopping) return;
     const startTime = Date.now();
-    const DURATION = 1500; // 长按时间，1.5秒
+    const DURATION = 1500;
 
     const tick = () => {
         const elapsed = Date.now() - startTime;
@@ -529,14 +687,11 @@ export default function App() {
         if (progress < 1) {
             stopIntervalRef.current = requestAnimationFrame(tick);
         } else {
-            // 长按完成
             stopIntervalRef.current = null;
-            // 触发退出动画
             setIsStopping(true);
-            // 等待动画完成后切换状态
             setTimeout(() => {
                 stopTimer();
-            }, 500); // 500ms 对应 CSS transition duration
+            }, 500);
         }
     };
 
@@ -544,7 +699,6 @@ export default function App() {
   };
 
   const handleStopPressEnd = () => {
-    // 只有在没有进入 stopping 状态时才取消
     if (!isStopping && stopIntervalRef.current) {
         cancelAnimationFrame(stopIntervalRef.current);
         stopIntervalRef.current = null;
@@ -570,9 +724,9 @@ export default function App() {
     const SWIPE_THRESHOLD = 50;
 
     if (Math.abs(diff) > SWIPE_THRESHOLD) {
-      if (diff > 0) { // Swiped left
+      if (diff > 0) {
         handleModeSelect(selectedModeIndex + 1);
-      } else { // Swiped right
+      } else {
         handleModeSelect(selectedModeIndex - 1);
       }
     }
@@ -598,9 +752,9 @@ export default function App() {
     const SWIPE_THRESHOLD = 50;
 
     if (Math.abs(diff) > SWIPE_THRESHOLD) {
-      if (diff > 0) { // Swiped left
+      if (diff > 0) {
         handleModeSelect(selectedModeIndex + 1);
-      } else { // Swiped right
+      } else {
         handleModeSelect(selectedModeIndex - 1);
       }
     }
@@ -614,7 +768,6 @@ export default function App() {
     }
   };
 
-  // 闹钟页面手势处理
   const handleAlarmTouchStart = (e: React.TouchEvent) => {
     if (appState !== AppState.ALARM) return;
     dragStartY.current = e.touches[0].clientY;
@@ -623,24 +776,16 @@ export default function App() {
   const handleAlarmTouchMove = (e: React.TouchEvent) => {
     if (appState !== AppState.ALARM || dragStartY.current === null) return;
     const currentY = e.touches[0].clientY;
-    
-    // 计算从点击处向上的拖拽距离
     const diff = dragStartY.current - currentY;
-    
-    // 只处理向上滑动 (diff > 0)，并限制最大视觉位移
     setSlideY(Math.max(0, Math.min(diff, 300)));
   };
 
   const handleAlarmTouchEnd = () => {
     if (appState !== AppState.ALARM) return;
-    
-    // 滑动距离阈值，超过此距离且松手才触发
     const SWIPE_THRESHOLD = 150; 
-    
     if (slideY > SWIPE_THRESHOLD) {
         completeSession();
     } else {
-        // 未达到阈值或用户滑回去了，重置
         setSlideY(0);
     }
     dragStartY.current = null;
@@ -653,18 +798,14 @@ export default function App() {
 
   const handleAlarmMouseMove = (e: React.MouseEvent) => {
       if (appState !== AppState.ALARM || dragStartY.current === null) return;
-      
       const currentY = e.clientY;
       const diff = dragStartY.current - currentY;
-      
       setSlideY(Math.max(0, Math.min(diff, 300)));
   };
 
   const handleAlarmMouseUp = () => {
       if (appState !== AppState.ALARM) return;
-      
       const SWIPE_THRESHOLD = 150;
-
       if (slideY > SWIPE_THRESHOLD) {
           completeSession();
       } else {
@@ -673,13 +814,11 @@ export default function App() {
       dragStartY.current = null;
   };
 
-  // 获取唤醒时间字符串
   const getWakeUpTimeString = () => {
     const target = endTime || new Date(new Date().getTime() + displayDuration * 60000);
     return target.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
   };
 
-  // 格式时间显示
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
@@ -689,13 +828,10 @@ export default function App() {
   const { m, s } = formatTime(timeLeft);
   const StartIcon = IconMap[currentMode.iconType];
 
-  // 动画计算
   const idleTimerSize = currentMode.id === 'custom' ? 260 : 230;
   const runningTimerSize = 250;
   
-  // Revert to 700ms and original snappy bezier curve
   const transitionClass = "transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)]";
-  // 停止动画曲线 (稍微快一点，且带有缩小效果)
   const stopTransitionClass = "transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]";
 
   return (
@@ -707,19 +843,8 @@ export default function App() {
       onMouseMove={handleAlarmMouseMove}
       onMouseUp={handleAlarmMouseUp}
     >
-      {/* 
-        优化：传入 activeModeId 和 MODES 数组
-        Background 组件内部会渲染所有模式的图片并进行 opacity 切换
-        避免图片加载导致的闪黑问题
-      */}
       <Background activeModeId={currentMode.id} modes={MODES} />
       
-      {/* 
-        背景模糊层优化：
-        1. inset-[200px]: 进一步扩大边界，确保屏幕边缘采样无瑕疵
-        2. transform-gpu: 强制GPU加速，防止合成层抖动
-        3. will-change: 提前告知浏览器优化
-      */}
       <div 
         className={`${transitionClass} fixed -inset-[200px] z-5 transform-gpu`}
         style={{ 
@@ -744,7 +869,6 @@ export default function App() {
       />
 
       <div className={`fixed inset-0 z-50 bg-[#0B0D14] flex flex-col transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] ${isSettingsOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-            {/* Updated padding: px-6 pb-5 pt-12 as requested */}
             <div className="flex items-center justify-between px-6 pb-5 pt-12 border-b border-white/5 bg-[#0B0D14] shrink-0 z-20">
                 <div className="text-xl font-semibold tracking-wide text-white">设置</div>
                 <button onClick={() => setIsSettingsOpen(false)} className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors">
@@ -865,7 +989,6 @@ export default function App() {
 
       {appState === AppState.IDLE && (
         <div className="flex flex-col h-full relative z-10">
-            {/* 顶部栏 - 向上位移淡出 */}
             <div 
               className={`pt-12 px-6 flex justify-between items-center text-white/80 relative z-40 ${transitionClass}`}
               style={{ 
@@ -884,7 +1007,6 @@ export default function App() {
                 </button>
             </div>
 
-            {/* 模式选择 - 向上位移淡出，增加位移量 */}
             <div 
               className={`relative z-30 ${transitionClass}`}
               style={{ 
@@ -897,7 +1019,6 @@ export default function App() {
                     className="mt-2 pt-10 flex overflow-x-auto space-x-2 px-4 pb-4 no-scrollbar relative items-center"
                     style={{ maskImage: 'linear-gradient(to right, transparent, black 5%, black 95%, transparent)' }}
                 >
-                    {/* Active Indicator - Light Ball Effect */}
                     <div 
                         className="absolute rounded-full bg-white/20 backdrop-blur-md border border-white/30 transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] z-0 shadow-[0_0_15px_rgba(255,255,255,0.3)]"
                         style={{ 
@@ -926,7 +1047,6 @@ export default function App() {
                 </div>
             </div>
 
-            {/* 主内容区域 - 中间放大 */}
             <div 
               className="flex-1 flex flex-col items-center justify-center"
               onTouchStart={handleTouchStart}
@@ -984,7 +1104,6 @@ export default function App() {
                     </div>
                 </div>
 
-                {/* 底部控制区域 - 向下位移淡出 */}
                 <div 
                   className={`pb-16 flex flex-col items-center justify-center w-full relative z-20 ${transitionClass}`}
                   style={{ 
@@ -1048,14 +1167,12 @@ export default function App() {
         >
             <div className="pt-12 px-6 flex justify-center items-center text-white/80">
                 <div className="text-lg font-light tracking-wide opacity-80">
-                    {/* 根据状态显示不同标题 */}
                     {isSnoozing ? '再睡一会' : currentMode.name.split(' ')[0]}
                 </div>
             </div>
 
             <div className="flex-1 flex flex-col items-center justify-center">
                 <div className="relative flex items-center justify-center">
-                    {/* 使用 activeDuration 计算圆环进度 */}
                     <CircularTimer progress={1 - (timeLeft / (activeDuration * 60))} size={runningTimerSize} color="white" />
                     
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
