@@ -201,9 +201,137 @@ export default function App() {
       localStorage.removeItem('ACTIVE_NAP_SESSION');
   };
 
+  // --- AUDIO HANDLERS ---
+  // Moved up to be accessible for stopTimer
+  const playAudio = (trackPath: string | undefined) => {
+      if (!audioRef.current) return;
+
+      if (!trackPath) {
+          console.log("No audio track selected");
+          return;
+      }
+
+      // 如果已经在播放这首歌，就不重头开始了
+      if (playingAudioPath === trackPath && !audioRef.current.paused) {
+          return;
+      }
+
+      let audioSrc = trackPath;
+      if (Capacitor.isNativePlatform()) {
+          audioSrc = Capacitor.convertFileSrc(trackPath);
+      }
+      
+      audioRef.current.src = audioSrc;
+      audioRef.current.load();
+      
+      const playPromise = audioRef.current.play();
+      if (playPromise !== undefined) {
+        playPromise
+            .then(() => {
+                setPlayingAudioPath(trackPath);
+            })
+            .catch(e => {
+                console.error("Error playing audio:", e);
+                setPlayingAudioPath(null);
+            });
+      }
+  };
+
+  const stopAllAudio = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      setPlayingAudioPath(null);
+    }
+  };
+
+  // --- TIMER FUNCTIONS (Declared before effects) ---
+  const finishTimer = async (isRestored = false) => {
+    if (appState === AppState.ALARM && !isRestored) return;
+
+    if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+    }
+    if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+    }
+
+    clearSessionFromStorage();
+    await releaseWakeLock();
+
+    if (Capacitor.isNativePlatform() && !isRestored) {
+        try {
+            await LocalNotifications.cancel({ notifications: [{ id: 1 }] });
+        } catch (e) { console.error(e); }
+        
+        if ('vibrate' in navigator) {
+            navigator.vibrate([1000, 500, 1000]);
+        }
+    }
+
+    setAppState(AppState.ALARM);
+    
+    if (globalWakeUpMusic?.path) {
+      playAudio(globalWakeUpMusic.path);
+    }
+  };
+
+  const stopTimer = async () => {
+    if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+    }
+    if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+    }
+    if (stopIntervalRef.current) {
+        cancelAnimationFrame(stopIntervalRef.current);
+        stopIntervalRef.current = null;
+    }
+
+    clearSessionFromStorage();
+
+    if (Capacitor.isNativePlatform()) {
+        try {
+            await LocalNotifications.cancel({ notifications: [{ id: 1 }] });
+        } catch (e) {
+            console.error("Failed to cancel notification", e);
+        }
+    }
+
+    await releaseWakeLock();
+
+    setStopProgress(0);
+    setIsAnimating(true);
+    setIsStopping(false);
+    setIsSnoozing(false);
+    
+    setAppState(AppState.IDLE);
+    setSessionStats(null);
+    setStartTime(null);
+    setEndTime(null);
+    setActiveDuration(0);
+    stopAllAudio();
+
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            setIsAnimating(false);
+        });
+    });
+  };
+
+  // Keep a fresh ref to stopTimer for the event listener
+  const stopTimerRef = useRef(stopTimer);
+  useEffect(() => { stopTimerRef.current = stopTimer; }, [stopTimer]);
+
   // --- EFFECTS ---
 
   useEffect(() => {
+    let backButtonListener: any;
+
     // 沉浸式状态栏设置
     if (Capacitor.isNativePlatform()) {
         const initNative = async () => {
@@ -215,27 +343,23 @@ export default function App() {
                 
                 await LocalNotifications.requestPermissions();
 
-                // 核心：创建高权限通知渠道，对齐截图中的权限
                 await LocalNotifications.createChannel({
                     id: 'zen_nap_alarm_channel',
                     name: 'Zen Nap Alarm',
                     description: 'Notifications for nap completion',
-                    importance: 5, // High Importance (Heads-up display, Sound)
-                    visibility: 1, // Public (Show full content on lock screen)
-                    vibration: true, // 震动权限
-                    lights: true, // 呼吸灯权限
+                    importance: 5,
+                    visibility: 1,
+                    vibration: true,
+                    lights: true,
                     lightColor: '#FFFFFF',
-                    sound: 'default' // 发声权限
+                    sound: 'default'
                 });
 
-                // 注册通知点击事件监听
                 LocalNotifications.addListener('localNotificationActionPerformed', (notification) => {
-                    // 用户点击了通知，我们需要立即检查状态并可能跳转
                     console.log('Notification clicked', notification);
                     checkSessionState();
                 });
 
-                // 注册 App 状态变化监听（后台 -> 前台）
                 CapacitorApp.addListener('appStateChange', ({ isActive }: { isActive: boolean }) => {
                     if (isActive) {
                         checkSessionState();
@@ -243,26 +367,24 @@ export default function App() {
                 });
 
                 // 处理物理返回键
-                CapacitorApp.addListener('backButton', () => {
+                backButtonListener = await CapacitorApp.addListener('backButton', () => {
                     if (isSettingsOpenRef.current) {
                         setIsSettingsOpen(false);
                         return;
                     }
                     
-                    if (appStateRef.current === AppState.RUNNING) {
-                        // 倒计时中，按返回键最小化应用，保持后台运行
-                        CapacitorApp.minimizeApp();
+                    // 总结页按下返回 -> 回到首页 (执行 stopTimer 逻辑来清理和重置)
+                    if (appStateRef.current === AppState.SUMMARY) {
+                        stopTimerRef.current();
                         return;
                     }
                     
-                    // 首页或总结页，退出应用
-                    if (appStateRef.current === AppState.IDLE || appStateRef.current === AppState.SUMMARY) {
-                        CapacitorApp.exitApp();
-                        return;
-                    }
-
-                    // 闹钟页面，最小化
-                    if (appStateRef.current === AppState.ALARM) {
+                    // 首页、倒计时中、闹钟响铃中 -> 最小化应用 (后台运行)
+                    if (
+                        appStateRef.current === AppState.IDLE || 
+                        appStateRef.current === AppState.RUNNING ||
+                        appStateRef.current === AppState.ALARM
+                    ) {
                         CapacitorApp.minimizeApp();
                         return;
                     }
@@ -275,9 +397,14 @@ export default function App() {
         initNative();
     }
 
-    // 初始加载时检查是否有未完成的会话
     checkSessionState();
-  }, []); // Run once on mount
+
+    return () => {
+        if (backButtonListener) {
+            backButtonListener.remove();
+        }
+    };
+  }, []); 
 
   // 核心状态检查逻辑：用于恢复状态或触发闹钟
   const checkSessionState = () => {
@@ -288,19 +415,16 @@ export default function App() {
         const session: PersistedSession = JSON.parse(savedSession);
         const now = Date.now();
         
-        // 恢复基本状态
         setSelectedModeIndex(session.modeIndex);
         setActiveDuration(session.durationMinutes);
         setIsSnoozing(session.isSnoozing);
         setEndTime(new Date(session.endTime));
         setStartTime(new Date(session.startTime));
         
-        // 如果时间已经到了
         if (now >= session.endTime) {
             console.log("Session expired while backgrounded/killed. Triggering ALARM.");
-            finishTimer(true); // true = restored from background
+            finishTimer(true); 
         } else {
-            // 时间还没到，恢复 RUNNING 状态
             console.log("Restoring RUNNING session.");
             setAppState(AppState.RUNNING);
             const remainingSec = Math.floor((session.endTime - now) / 1000);
@@ -344,7 +468,6 @@ export default function App() {
     localStorage.setItem('zenNapSettings', JSON.stringify(settings));
   }, [globalWakeUpMusic, globalRefreshMusic, modeGuideMusic, snoozeDuration]);
 
-  // Update Indicator Position when mode changes
   useLayoutEffect(() => {
       const btn = modeButtonsRef.current[selectedModeIndex];
       if (btn) {
@@ -358,15 +481,13 @@ export default function App() {
       }
   }, [selectedModeIndex]);
 
-  // 计时器逻辑
   useEffect(() => {
     if (appState === AppState.RUNNING && startTime && activeDuration > 0) {
       
       const checkTimer = () => {
-        if (!endTime) return; // Should allow finishTimer to be called via endTime check
+        if (!endTime) return; 
         
         const now = Date.now();
-        // 优先使用 Date 对象计算剩余时间，避免 setInterval 的误差累积
         const remainingSeconds = Math.floor((endTime.getTime() - now) / 1000);
         
         setTimeLeft(Math.max(0, remainingSeconds));
@@ -376,7 +497,6 @@ export default function App() {
         }
       };
 
-      // 1. 高频动画循环 (前景使用)
       const loop = () => {
         checkTimer();
         if (appState === AppState.RUNNING) {
@@ -385,7 +505,6 @@ export default function App() {
       };
       animationFrameRef.current = requestAnimationFrame(loop);
 
-      // 2. 低频 Interval (后台/锁屏兜底)
       intervalRef.current = setInterval(checkTimer, 1000);
     }
     
@@ -399,54 +518,7 @@ export default function App() {
         intervalRef.current = null;
       }
     };
-  }, [appState, startTime, endTime, activeDuration]); // Added endTime
-
-  // --- AUDIO HANDLERS ---
-  
-  const playAudio = (trackPath: string | undefined) => {
-      if (!audioRef.current) return;
-
-      if (!trackPath) {
-          console.log("No audio track selected");
-          return;
-      }
-
-      // 如果已经在播放这首歌，就不重头开始了
-      if (playingAudioPath === trackPath && !audioRef.current.paused) {
-          return;
-      }
-
-      let audioSrc = trackPath;
-      if (Capacitor.isNativePlatform()) {
-          audioSrc = Capacitor.convertFileSrc(trackPath);
-      }
-      
-      audioRef.current.src = audioSrc;
-      audioRef.current.load();
-      
-      const playPromise = audioRef.current.play();
-      if (playPromise !== undefined) {
-        playPromise
-            .then(() => {
-                setPlayingAudioPath(trackPath);
-            })
-            .catch(e => {
-                console.error("Error playing audio:", e);
-                // 自动播放策略可能会阻止播放，
-                // 但如果是用户点击操作触发的，通常允许。
-                // 如果是后台恢复触发的，可能需要再次交互。
-                setPlayingAudioPath(null);
-            });
-      }
-  };
-
-  const stopAllAudio = () => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-      setPlayingAudioPath(null);
-    }
-  };
+  }, [appState, startTime, endTime, activeDuration]); 
 
   // --- SETTINGS HANDLERS ---
   const handleUploadClick = (field: 'wakeUp' | 'refresh' | 'guide', modeId?: string) => {
@@ -610,90 +682,6 @@ export default function App() {
         startTimerInternal(displayDuration);
         setIsAnimating(false);
     }, 700);
-  };
-
-  const stopTimer = async () => {
-    if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = null;
-    }
-    if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-    }
-    if (stopIntervalRef.current) {
-        cancelAnimationFrame(stopIntervalRef.current);
-        stopIntervalRef.current = null;
-    }
-
-    // Clear Persistence
-    clearSessionFromStorage();
-
-    // Cancel Notification
-    if (Capacitor.isNativePlatform()) {
-        try {
-            await LocalNotifications.cancel({ notifications: [{ id: 1 }] });
-        } catch (e) {
-            console.error("Failed to cancel notification", e);
-        }
-    }
-
-    await releaseWakeLock();
-
-    setStopProgress(0);
-    setIsAnimating(true);
-    setIsStopping(false);
-    setIsSnoozing(false);
-    
-    setAppState(AppState.IDLE);
-    setSessionStats(null);
-    setStartTime(null);
-    setEndTime(null);
-    setActiveDuration(0);
-    stopAllAudio();
-
-    requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-            setIsAnimating(false);
-        });
-    });
-  };
-
-  const finishTimer = async (isRestored = false) => {
-    // 如果已经在 Alarm 状态，不要重复触发（防止多次渲染或逻辑冲突）
-    // 除非是强制恢复（isRestored）
-    if (appState === AppState.ALARM && !isRestored) return;
-
-    if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = null;
-    }
-    if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-    }
-
-    // 清除持久化（因为已经完成了）
-    clearSessionFromStorage();
-    await releaseWakeLock();
-
-    if (Capacitor.isNativePlatform() && !isRestored) {
-        // 如果我们是“前台”正常结束的，取消那个备用的后台通知，避免重复响铃
-        try {
-            await LocalNotifications.cancel({ notifications: [{ id: 1 }] });
-        } catch (e) { console.error(e); }
-        
-        if ('vibrate' in navigator) {
-            navigator.vibrate([1000, 500, 1000]);
-        }
-    }
-
-    setAppState(AppState.ALARM);
-    
-    // 确保有声音路径
-    if (globalWakeUpMusic?.path) {
-      playAudio(globalWakeUpMusic.path);
-    }
   };
 
   const completeSession = () => {
