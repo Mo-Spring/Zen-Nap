@@ -7,25 +7,18 @@ const __dirname = path.dirname(__filename);
 
 const ANDROID_RES_PATH = path.join(__dirname, '../android/app/src/main/res');
 
-// 1. 定义矢量图形 (前景 - Zen Zzz 图标)
-// 使用标准的 vector drawble 格式
+// --- 配置颜色 ---
+// 根据您的截图：白底，天蓝色线条
+const COLOR_BG = "#FFFFFF"; 
+const COLOR_FG = "#3B82F6"; // 亮蓝色
+
+// 1. 定义矢量图形 (前景 - Zen 图标)
 const FOREGROUND_XML = `<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
-    <!-- 
-       图标逻辑：
-       画布映射：24x24 坐标系映射到 108dp x 108dp
-       安全区域：中间 72dp (即坐标系中的 16x16 区域)
-       缩放计算：
-       原图圆形半径9，直径18。
-       缩放 0.65 后，直径约为 11.7 (在24系统中) -> 对应 108dp 中的 52dp，完美处于安全区。
-       位移计算：
-       原中心 (12,12)。缩放后中心变 (7.8, 7.8)。
-       需要移回 (12,12)，偏移量 = 12 - 7.8 = 4.2。
-    -->
     <group 
         android:scaleX="0.65" 
         android:scaleY="0.65" 
@@ -34,30 +27,30 @@ const FOREGROUND_XML = `<?xml version="1.0" encoding="utf-8"?>
         <!-- 圆环背景 -->
         <path
             android:pathData="M12,13 m-9,0 a9,9 0 1,1 18,0 a9,9 0 1,1 -18,0"
-            android:strokeColor="#FFFFFF"
+            android:strokeColor="${COLOR_FG}"
             android:strokeWidth="1.5"
-            android:strokeAlpha="0.4"
+            android:strokeAlpha="0.3"
             android:strokeLineCap="round"
             android:strokeLineJoin="round" />
         <!-- 大 Z -->
         <path
             android:pathData="M9 10h6l-6 7h6"
-            android:strokeColor="#FFFFFF"
+            android:strokeColor="${COLOR_FG}"
             android:strokeWidth="2.2"
             android:strokeLineCap="round"
             android:strokeLineJoin="round" />
         <!-- 小 z -->
         <path
             android:pathData="M19 4h3l-3 3h3"
-            android:strokeColor="#FFFFFF"
+            android:strokeColor="${COLOR_FG}"
             android:strokeWidth="1.8"
-            android:strokeAlpha="0.9"
+            android:strokeAlpha="0.8"
             android:strokeLineCap="round"
             android:strokeLineJoin="round" />
     </group>
 </vector>`;
 
-// 2. 定义背景 (黑色)
+// 2. 定义背景 (白色)
 const BACKGROUND_XML = `<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
@@ -65,7 +58,7 @@ const BACKGROUND_XML = `<?xml version="1.0" encoding="utf-8"?>
     android:viewportWidth="1"
     android:viewportHeight="1">
     <path
-        android:fillColor="#000000"
+        android:fillColor="${COLOR_BG}"
         android:pathData="M0,0h1v1h-1z" />
 </vector>`;
 
@@ -76,23 +69,40 @@ const ADAPTIVE_ICON_XML = `<?xml version="1.0" encoding="utf-8"?>
     <foreground android:drawable="@drawable/ic_launcher_foreground"/>
 </adaptive-icon>`;
 
-function cleanupConflictingFiles(basePath) {
-    // Capacitor 默认可能会生成这些 PNG 文件，它们会与我们的 XML 冲突
-    // 导致构建系统无法确定使用哪个资源，从而回退到安卓机器人默认图标
-    const conflictDirs = ['drawable', 'drawable-v24'];
-    const conflictFiles = ['ic_launcher_foreground.png', 'ic_launcher_background.png'];
+function cleanupDefaultIcons(basePath) {
+    // 这里的关键是：Capacitor 默认在所有 mipmap-* 文件夹生成了 ic_launcher.png
+    // 如果不删除它们，Android 会优先使用 PNG 而不是我们的 anydpi XML
+    // 这就是导致显示“安卓机器人”或者“旧图标”的根本原因
+    const dirsToClean = [
+        'mipmap-mdpi',
+        'mipmap-hdpi',
+        'mipmap-xhdpi',
+        'mipmap-xxhdpi',
+        'mipmap-xxxhdpi',
+        'drawable',           // 清理旧的 drawable
+        'drawable-v24'
+    ];
 
-    conflictDirs.forEach(dir => {
-        const dirPath = path.join(basePath, dir);
+    const filesToDelete = [
+        'ic_launcher.png',
+        'ic_launcher_round.png',
+        'ic_launcher_foreground.png',
+        'ic_launcher_background.png'
+    ];
+
+    console.log('🧹 Cleaning up default Capacitor icons...');
+
+    dirsToClean.forEach(dirName => {
+        const dirPath = path.join(basePath, dirName);
         if (fs.existsSync(dirPath)) {
-            conflictFiles.forEach(file => {
-                const filePath = path.join(dirPath, file);
+            filesToDelete.forEach(fileName => {
+                const filePath = path.join(dirPath, fileName);
                 if (fs.existsSync(filePath)) {
                     try {
                         fs.unlinkSync(filePath);
-                        console.log(`Deleted conflicting file: ${dir}/${file}`);
+                        // console.log(`   Deleted: ${dirName}/${fileName}`);
                     } catch (e) {
-                        console.warn(`Failed to delete ${filePath}:`, e);
+                        console.warn(`   Failed to delete ${filePath}`, e);
                     }
                 }
             });
@@ -102,12 +112,12 @@ function cleanupConflictingFiles(basePath) {
 
 function writeIconFiles() {
     if (!fs.existsSync(ANDROID_RES_PATH)) {
-        console.log('Android res directory not found. Skipping icon update.');
+        console.log('⚠️ Android res directory not found. Skipping icon update.');
         return;
     }
 
-    // 1. 先清理冲突的 PNG
-    cleanupConflictingFiles(ANDROID_RES_PATH);
+    // 1. 强力清理所有可能冲突的默认 PNG
+    cleanupDefaultIcons(ANDROID_RES_PATH);
 
     const drawablePath = path.join(ANDROID_RES_PATH, 'drawable');
     const anydpiPath = path.join(ANDROID_RES_PATH, 'mipmap-anydpi-v26');
@@ -117,14 +127,16 @@ function writeIconFiles() {
     if (!fs.existsSync(anydpiPath)) fs.mkdirSync(anydpiPath, { recursive: true });
 
     // 2. 写入矢量资源 (Drawable)
+    // 这些是实际的图形数据
     fs.writeFileSync(path.join(drawablePath, 'ic_launcher_foreground.xml'), FOREGROUND_XML);
     fs.writeFileSync(path.join(drawablePath, 'ic_launcher_background.xml'), BACKGROUND_XML);
     
     // 3. 写入自适应图标配置 (Mipmap AnyDPI)
+    // 这个文件告诉 Android 8.0+ 系统：“请忽略其他文件夹里的内容，使用这里定义的矢量图”
     fs.writeFileSync(path.join(anydpiPath, 'ic_launcher.xml'), ADAPTIVE_ICON_XML);
     fs.writeFileSync(path.join(anydpiPath, 'ic_launcher_round.xml'), ADAPTIVE_ICON_XML);
     
-    console.log('✅ Android Adaptive Icons updated successfully (Conflicting PNGs removed).');
+    console.log('✅ Android Adaptive Icons updated successfully (White/Blue Theme).');
 }
 
 writeIconFiles();
