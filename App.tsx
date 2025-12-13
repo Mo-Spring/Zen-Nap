@@ -202,8 +202,7 @@ export default function App() {
   };
 
   // --- AUDIO HANDLERS ---
-  // Moved up to be accessible for stopTimer
-  const playAudio = (trackPath: string | undefined) => {
+  const playAudio = (trackPath: string | undefined, loop: boolean = false) => {
       if (!audioRef.current) return;
 
       if (!trackPath) {
@@ -211,8 +210,12 @@ export default function App() {
           return;
       }
 
-      // 如果已经在播放这首歌，就不重头开始了
+      // 如果已经在播放这首歌
       if (playingAudioPath === trackPath && !audioRef.current.paused) {
+          // 确保循环状态一致
+          if (audioRef.current.loop !== loop) {
+              audioRef.current.loop = loop;
+          }
           return;
       }
 
@@ -222,6 +225,7 @@ export default function App() {
       }
       
       audioRef.current.src = audioSrc;
+      audioRef.current.loop = loop; // 设置循环
       audioRef.current.load();
       
       const playPromise = audioRef.current.play();
@@ -240,6 +244,7 @@ export default function App() {
   const stopAllAudio = () => {
     if (audioRef.current) {
       audioRef.current.pause();
+      audioRef.current.loop = false; // 重置循环状态
       audioRef.current.currentTime = 0;
       setPlayingAudioPath(null);
     }
@@ -274,7 +279,8 @@ export default function App() {
     setAppState(AppState.ALARM);
     
     if (globalWakeUpMusic?.path) {
-      playAudio(globalWakeUpMusic.path);
+      // 唤醒音乐开启循环播放
+      playAudio(globalWakeUpMusic.path, true);
     }
   };
 
