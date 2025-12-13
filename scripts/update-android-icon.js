@@ -1,116 +1,92 @@
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+更改安卓 App 在桌面上的图标，最标准且简单的做法是使用 Android Studio 自带的 Image Asset Studio 工具。它可以自动为你生成适配不同屏幕分辨率（hdpi, xhdpi 等）以及适配 Android 8.0+ 自适应图标（Adaptive Icons）所需的所有文件。
+以下是详细的操作步骤：
+方法一：使用 Android Studio 自动生成（推荐）
+这是最不容易出错的方法，它会自动处理圆形图标、圆角矩形图标和旧版方块图标。
+准备素材：
+准备一张高清的 PNG 或 JPG 图片（建议至少 1024x1024 像素）。
+或者准备一个 SVG 矢量图。
+打开工具：
+在 Android Studio 的项目视图中，右键点击 res 文件夹。
+选择 New -> Image Asset 。
 
-// 指向 Android 项目的资源目录
-const ANDROID_RES_PATH = path.join(__dirname, '../android/app/src/main/res');
+配置图标(Configure Icon Set) ：
 
-// --- 颜色配置 (使用完全不透明的颜色，避免兼容性问题) ---
-// 背景: 纯黑
-const COLOR_BG = "#FF000000";
+启动器图标（自适应和传统）。
 
-// 模拟透明度 (在黑色背景上)
-// 30% White on Black ~= Dark Grey (#333333)
-const COLOR_RING = "#FF333333"; 
-// 100% White
-const COLOR_BIG_Z = "#FFFFFFFF";
-// 70% White on Black ~= Light Grey (#AAAAAA)
-const COLOR_SMALL_Z = "#FFAAAAAA";
+Name: 默认为 ic_launcher，通常不需要改（如果你改了名字，后面需要在 Manifest 里对应修改）。
+第一层：前景层（前景层） ：
 
-// 1. 前景图标 (Zen Logo)
-const FOREGROUND_XML = `<?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="24"
-    android:viewportHeight="24">
-    
-    <!-- 圆环: 居中, 半径9 -->
-    <path
-        android:pathData="M12,12 m-9,0 a9,9 0 1,1 18,0 a9,9 0 1,1 -18,0"
-        android:strokeColor="${COLOR_RING}"
-        android:strokeWidth="1.5"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
+Source Asset: 选择 Image，然后点击路径后的文件夹图标，选择你准备好的 Logo 图片。
+Scaling: 调整 Resize 滑块，确保你的 Logo 在预览图的安全区域（Safe Zone）内，不要被裁切掉。
+第二层：背景层（background 层） ：
 
-    <!-- 大 Z -->
-    <path
-        android:pathData="M8 9h8l-8 8h8"
-        android:strokeColor="${COLOR_BIG_Z}"
-        android:strokeWidth="2.0"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
+Source Asset : 可以选择`Col
 
-    <!-- 小 z -->
-    <path
-        android:pathData="M18.5 5h3l-3 3h3"
-        android:strokeColor="${COLOR_SMALL_Z}"
-        android:strokeWidth="1.5"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
-</vector>`;
+Legacy (旧版兼容)：默认设置即可，它会生成旧版本安卓需要的普通图标。
+生成文件：
+下一个。
 
-// 2. 背景 (纯黑)
-const BACKGROUND_XML = `<?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="1"
-    android:viewportHeight="1">
-    <path
-        android:fillColor="${COLOR_BG}"
-        android:pathData="M0,0h1v1h-1z" />
-</vector>`;
+你会看到系统即将生成一系列文件（覆盖 mipmap-xhdpi, mipmap-xxhdpi 等文件夹下的内容）。
+点击 Finish 。
 
-// 3. 自适应图标入口
-const ADAPTIVE_ICON_XML = `<?xml version="1.0" encoding="utf-8"?>
-<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-    <background android:drawable="@drawable/ic_launcher_background"/>
-    <foreground android:drawable="@drawable/ic_launcher_foreground"/>
-</adaptive-icon>`;
+方法二：检查/修改 AndroidManifest.xml
+通常在使用“方法一”后，IDE 会自动替换原有资源，你不需要改代码。但为了确保生效，或者如果你改了图标文件名，需要检查清单文件。
+src/main/AndroidManifest.xml，找到标签：
 
-function updateIcons() {
-    console.log('🔄 Starting Android Icon Update...');
-    
-    if (!fs.existsSync(ANDROID_RES_PATH)) {
-        console.error(`❌ Android res directory not found at: ${ANDROID_RES_PATH}`);
-        console.error('   Please run "npx cap add android" first.');
-        return;
-    }
+code
+Xml
+<application
+    android:allowBackup="true"
+    android:icon="@mipmap/ic_launcher"        <!-- 指定普通图标 -->
+    android:label="@string/app_name"
+    android:roundIcon="@mipmap/ic_launcher_round"  <!-- 指定圆形图标(重要) -->
+    android:supportsRtl="true"
+    android:theme="@style/Theme.MyApp">
+    ...
+</application>
+android:icon: 对应旧版或方形图标。
+android:roundIcon: 对应圆形图标（Android 7.1+ 很多手机默认用这个）。
+确保这里的名字和你生成的资源文件名一致。
+方法三：动态改变图标（进阶）
+如果你想实现类似“双11”活动图标，或者VIP用户尊贵图标（不更新App就在用户手机上直接变图标），需要用到 activity-alias 技术。
+在 AndroidManifest.xml 中配置多个入口别名：
+code
+Xml
+<!-- 默认的主入口 -->
+<activity
+    android:name=".MainActivity"
+    android:enabled="true"
+    android:exported="true"
+    android:icon="@mipmap/ic_launcher_default"
+    android:label="@string/app_name">
+    <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+    </intent-filter>
+</activity>
 
-    // 目标目录
-    const drawableDir = path.join(ANDROID_RES_PATH, 'drawable');
-    const anydpiDir = path.join(ANDROID_RES_PATH, 'mipmap-anydpi-v26');
-
-    // 确保目录存在
-    if (!fs.existsSync(drawableDir)) fs.mkdirSync(drawableDir, { recursive: true });
-    if (!fs.existsSync(anydpiDir)) fs.mkdirSync(anydpiDir, { recursive: true });
-
-    // 写入文件
-    try {
-        // 1. 写入前景和背景矢量图
-        fs.writeFileSync(path.join(drawableDir, 'ic_launcher_foreground.xml'), FOREGROUND_XML);
-        fs.writeFileSync(path.join(drawableDir, 'ic_launcher_background.xml'), BACKGROUND_XML);
-        
-        // 2. 写入自适应图标定义 (覆盖默认的 XML)
-        fs.writeFileSync(path.join(anydpiDir, 'ic_launcher.xml'), ADAPTIVE_ICON_XML);
-        fs.writeFileSync(path.join(anydpiDir, 'ic_launcher_round.xml'), ADAPTIVE_ICON_XML);
-
-        console.log(`✅ Successfully wrote XML icons to:`);
-        console.log(`   - ${path.join(drawableDir, 'ic_launcher_foreground.xml')}`);
-        console.log(`   - ${path.join(anydpiDir, 'ic_launcher.xml')}`);
-
-        // 注意：我们不再强制删除 mipmap-xhdpi 等文件夹中的 PNG。
-        // 如果设备支持 XML (Android 8+)，它会优先读取 mipmap-anydpi-v26 中的 XML。
-        // 如果设备不支持，它会回退到 PNG (可能是旧的图标，但也比崩溃好)。
-        // 为了避免混淆，我们可以尝试删除旧的 XML 引用如果存在。
-
-    } catch (error) {
-        console.error('❌ Error writing icon files:', error);
-    }
-}
-
-updateIcons();
+<!-- 备用图标入口（默认禁用） -->
+<activity-alias
+    android:name=".MainActivityVIP"
+    android:enabled="false"
+    android:icon="@mipmap/ic_launcher_vip"
+    android:label="@string/app_name"
+    android:targetActivity=".MainActivity">
+    <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+    </intent-filter>
+</activity-alias>
+在 Java/Kotlin 代码中通过 PackageManager 启用别名并禁用原名，即可实现图标切换。
+⚠️ 常见问题与避坑
+改了图标但手机上没变？
+原因：Android 系统的 Launcher（桌面启动器）有缓存机制。
+解决：
+卸载 App 重新安装（最有效）。
+或者重启手机。
+或者尝试更换一个模拟器/真机测试。
+图标四周有白边？
+这是安卓方法一 中的 Foreground/Background 分层方式制作，不要直接拿一张带圆角的 PNG 设为背景，否则系统会在你的圆角图外面再加一层白底圆圈。
+roundIcon 很重要
+很多国产手机（小米、华为等）和 Pixel 手机默认优先读取 android:roundIcon。如果你只改了 icon 而没改 roundIcon，桌面图标可能不会变。
