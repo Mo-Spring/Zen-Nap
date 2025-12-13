@@ -34,7 +34,6 @@ jobs:
     - name: Add Android platform and Set Icon
       run: |
         npx cap add android
-        # 关键步骤：运行图标生成脚本，覆盖默认图标
         npm run set-icon
         npx cap sync
         
@@ -42,7 +41,8 @@ jobs:
       run: |
         cd android
         chmod +x gradlew
-        ./gradlew assembleDebug
+        # 添加 clean 任务以确保清除之前的构建缓存（解决图标不更新的问题）
+        ./gradlew clean assembleDebug
         
     - name: Upload APK
       uses: actions/upload-artifact@v4
