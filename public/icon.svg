@@ -1,11 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-  <!-- Circle -->
-  <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z" stroke-width="1.5" opacity="0.4" stroke="#000000" />
+  <!-- Ring -->
+  <path d="M 12 6.5 A 5.5 5.5 0 1 1 12 17.5 A 5.5 5.5 0 1 1 12 6.5" stroke-width="1.5" opacity="0.4" stroke="#000000" />
   <!-- Big Z -->
-  <path d="M8 9h8l-8 8h8" stroke-width="2" stroke="#000000" />
+  <path d="M 9.5 9.5 H 14.5 L 9.5 14.5 H 14.5" stroke-width="2" stroke="#000000" />
   <!-- Small z -->
-  <path d="M18.5 5h3l-3 3h3" stroke-width="1.5" opacity="0.7" stroke="#000000" />
-  
-  <!-- 注意：Web 图标通常显示在浅色标签页上，所以这里默认用黑色线条。
-       如果是 PWA 安装到桌面，Manifest 会定义背景色。 -->
+  <path d="M 15.5 5.5 H 17.5 L 15.5 7.5 H 17.5" stroke-width="1.2" opacity="0.7" stroke="#000000" />
 </svg>
