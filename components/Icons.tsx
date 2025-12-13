@@ -1,5 +1,4 @@
-
-import { Zap, Coffee, Plane, Moon, 设置, BarChart2, ChevronLeft, Info, Hexagon } from 'lucide-react';
+import { Zap, Coffee, Plane, Moon, Settings, BarChart2, ChevronLeft, Info, Hexagon } from 'lucide-react';
 
 export const IconMap = {
   lightning: Zap,
@@ -10,11 +9,12 @@ export const IconMap = {
 };
 
 export const MenuIcon = () => <BarChart2 className="w-6 h-6 text-white/80" strokeWidth={1.5} />;
+// 设置按钮使用 Hexagon (六边形) 图标，更有科技感/禅意
 export const SettingsIcon = () => <Hexagon className="w-6 h-6 text-white/80" strokeWidth={1.5} />;
 export const BackIcon = () => <ChevronLeft className="w-8 h-8 text-white/90" strokeWidth={1.5} />;
 export const InfoIcon = () => <Info className="w-6 h-6 text-white/80" strokeWidth={1.5} />;
 
-// 新增的 App 图标：时钟圆环 + Zzz
+// Zen App 图标：时钟圆环 + Zzz
 export const ZenAppIcon = ({ className }: { className?: string }) => (
   <svg 
     viewBox="0 0 24 24" 
