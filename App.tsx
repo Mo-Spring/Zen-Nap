@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { Background } from './components/Background';
 import { CircularTimer } from './components/CircularTimer';
 import { WheelPicker } from './components/WheelPicker';
-import { IconMap, SettingsIcon } from './components/Icons';
+import { IconMap, SettingsIcon, ZenAppIcon } from './components/Icons';
 import { AppState, NapMode, SessionStats } from './types';
 import { Play, ChevronUp, Music, X, Upload } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
@@ -1025,7 +1025,7 @@ export default function App() {
                   opacity: isAnimating ? 0 : 1
               }}
             >
-                <div className="w-6 h-6" />
+                <ZenAppIcon className="w-6 h-6 text-white/80" />
                 <div className="text-lg tracking-wide font-medium">小憩</div>
                 <button 
                     onClick={() => setIsSettingsOpen(true)}
