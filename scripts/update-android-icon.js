@@ -7,15 +7,18 @@ const __dirname = path.dirname(__filename);
 
 const ANDROID_RES_PATH = path.join(__dirname, '../android/app/src/main/res');
 
-// --- 颜色配置 (使用 ARGB 格式处理透明度，确保兼容性) ---
-// 格式: #AARRGGBB
-const COLOR_BG = "#FFFFFFFF"; // 白色不透明
-const COLOR_FG_CIRCLE = "#4D3B82F6"; // 30% 透明度的蓝色
-const COLOR_FG_MAIN_Z = "#FF3B82F6"; // 100% 不透明蓝色
-const COLOR_FG_SMALL_Z = "#CC3B82F6"; // 80% 透明度蓝色
+// --- 颜色配置 (修正为黑底白字，符合 App 深色主题) ---
+// 格式: #AARRGGBB (Alpha, Red, Green, Blue)
+
+// 背景：纯黑
+const COLOR_BG = "#FF000000"; 
+
+// 线条：白色 (配合不同透明度)
+const COLOR_FG_CIRCLE = "#4DFFFFFF";  // 圆环：白色 30% 透明度 (0x4D = 77/255)
+const COLOR_FG_MAIN_Z = "#FFFFFFFF";  // 主 Z：纯白 100% 不透明
+const COLOR_FG_SMALL_Z = "#CCFFFFFF"; // 小 z：白色 80% 透明度 (0xCC = 204/255)
 
 // 1. 定义矢量图形 (前景 - Zen 图标)
-// 移除 strokeAlpha 属性，改用 strokeColor 的 ARGB 值，防止解析错误
 const FOREGROUND_XML = `<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
@@ -27,21 +30,21 @@ const FOREGROUND_XML = `<?xml version="1.0" encoding="utf-8"?>
         android:scaleY="0.65" 
         android:translateX="4.2" 
         android:translateY="4.2">
-        <!-- 圆环背景 -->
+        <!-- 圆环背景 (细线，低透明度) -->
         <path
             android:pathData="M12,13 m-9,0 a9,9 0 1,1 18,0 a9,9 0 1,1 -18,0"
             android:strokeColor="${COLOR_FG_CIRCLE}"
             android:strokeWidth="1.5"
             android:strokeLineCap="round"
             android:strokeLineJoin="round" />
-        <!-- 大 Z -->
+        <!-- 大 Z (粗线，高亮) -->
         <path
             android:pathData="M9 10h6l-6 7h6"
             android:strokeColor="${COLOR_FG_MAIN_Z}"
             android:strokeWidth="2.2"
             android:strokeLineCap="round"
             android:strokeLineJoin="round" />
-        <!-- 小 z -->
+        <!-- 小 z (中等线条，稍高透明度) -->
         <path
             android:pathData="M19 4h3l-3 3h3"
             android:strokeColor="${COLOR_FG_SMALL_Z}"
@@ -51,7 +54,7 @@ const FOREGROUND_XML = `<?xml version="1.0" encoding="utf-8"?>
     </group>
 </vector>`;
 
-// 2. 定义背景 (白色)
+// 2. 定义背景 (黑色)
 const BACKGROUND_XML = `<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
@@ -127,7 +130,7 @@ function writeIconFiles() {
     fs.writeFileSync(path.join(anydpiPath, 'ic_launcher.xml'), ADAPTIVE_ICON_XML);
     fs.writeFileSync(path.join(anydpiPath, 'ic_launcher_round.xml'), ADAPTIVE_ICON_XML);
     
-    console.log('✅ Android Adaptive Icons updated successfully (Safe ARGB Colors).');
+    console.log('✅ Android Adaptive Icons updated successfully (Dark Theme: Black BG + White Icon).');
 }
 
 writeIconFiles();
