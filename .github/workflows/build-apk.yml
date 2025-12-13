@@ -34,9 +34,10 @@ jobs:
         distribution: 'temurin'
         java-version: '17'
         
-    - name: Add Android platform
+    - name: Add Android platform and Set Icon
       run: |
         npx cap add android || true
+        npm run set-icon
         npx cap sync
         
     - name: Build APK
