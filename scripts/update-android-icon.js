@@ -7,54 +7,53 @@ const __dirname = path.dirname(__filename);
 
 const ANDROID_RES_PATH = path.join(__dirname, '../android/app/src/main/res');
 
-// --- 颜色配置 (修正为黑底白字，符合 App 深色主题) ---
-// 格式: #AARRGGBB (Alpha, Red, Green, Blue)
+// --- 1. 图标设计配置 (完全匹配截图) ---
+// Viewport: 24x24
+// 颜色: AARRGGBB 格式
 
-// 背景：纯黑
-const COLOR_BG = "#FF000000"; 
+// 背景: 纯黑
+const BG_COLOR = "#FF000000";
 
-// 线条：白色 (配合不同透明度)
-const COLOR_FG_CIRCLE = "#4DFFFFFF";  // 圆环：白色 30% 透明度 (0x4D = 77/255)
-const COLOR_FG_MAIN_Z = "#FFFFFFFF";  // 主 Z：纯白 100% 不透明
-const COLOR_FG_SMALL_Z = "#CCFFFFFF"; // 小 z：白色 80% 透明度 (0xCC = 204/255)
+// 前景: 
+// 圆环: 深灰色/半透明白 (#66FFFFFF)
+// 大 Z: 亮白色 (#FFFFFFFF)
+// 小 z: 稍暗白色 (#CCFFFFFF)
 
-// 1. 定义矢量图形 (前景 - Zen 图标)
 const FOREGROUND_XML = `<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
-    <group 
-        android:scaleX="0.65" 
-        android:scaleY="0.65" 
-        android:translateX="4.2" 
-        android:translateY="4.2">
-        <!-- 圆环背景 (细线，低透明度) -->
-        <path
-            android:pathData="M12,13 m-9,0 a9,9 0 1,1 18,0 a9,9 0 1,1 -18,0"
-            android:strokeColor="${COLOR_FG_CIRCLE}"
-            android:strokeWidth="1.5"
-            android:strokeLineCap="round"
-            android:strokeLineJoin="round" />
-        <!-- 大 Z (粗线，高亮) -->
-        <path
-            android:pathData="M9 10h6l-6 7h6"
-            android:strokeColor="${COLOR_FG_MAIN_Z}"
-            android:strokeWidth="2.2"
-            android:strokeLineCap="round"
-            android:strokeLineJoin="round" />
-        <!-- 小 z (中等线条，稍高透明度) -->
-        <path
-            android:pathData="M19 4h3l-3 3h3"
-            android:strokeColor="${COLOR_FG_SMALL_Z}"
-            android:strokeWidth="1.8"
-            android:strokeLineCap="round"
-            android:strokeLineJoin="round" />
-    </group>
+    
+    <!-- 1. 圆环 (居中, 半径9) -->
+    <!-- M12,12 m-9,0 a9,9 0 1,1 18,0 a9,9 0 1,1 -18,0 -->
+    <path
+        android:pathData="M12,12 m-9,0 a9,9 0 1,1 18,0 a9,9 0 1,1 -18,0"
+        android:strokeColor="#66FFFFFF"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+
+    <!-- 2. 大 Z (中心) -->
+    <!-- M8 9h8l-8 8h8 -->
+    <path
+        android:pathData="M8 9h8l-8 8h8"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.0"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+
+    <!-- 3. 小 z (右上角上标) -->
+    <!-- M18.5 5h3l-3 3h3 -->
+    <path
+        android:pathData="M18.5 5h3l-3 3h3"
+        android:strokeColor="#CCFFFFFF"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
 </vector>`;
 
-// 2. 定义背景 (黑色)
 const BACKGROUND_XML = `<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
@@ -62,75 +61,58 @@ const BACKGROUND_XML = `<?xml version="1.0" encoding="utf-8"?>
     android:viewportWidth="1"
     android:viewportHeight="1">
     <path
-        android:fillColor="${COLOR_BG}"
+        android:fillColor="${BG_COLOR}"
         android:pathData="M0,0h1v1h-1z" />
 </vector>`;
 
-// 3. 定义自适应图标 XML
 const ADAPTIVE_ICON_XML = `<?xml version="1.0" encoding="utf-8"?>
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@drawable/ic_launcher_background"/>
     <foreground android:drawable="@drawable/ic_launcher_foreground"/>
 </adaptive-icon>`;
 
-function cleanupDefaultIcons(basePath) {
-    const dirsToClean = [
-        'mipmap-mdpi',
-        'mipmap-hdpi',
-        'mipmap-xhdpi',
-        'mipmap-xxhdpi',
-        'mipmap-xxxhdpi',
-        'drawable',
-        'drawable-v24'
-    ];
-
-    const filesToDelete = [
-        'ic_launcher.png',
-        'ic_launcher_round.png',
-        'ic_launcher_foreground.png',
-        'ic_launcher_background.png'
-    ];
-
-    console.log('🧹 Cleaning up default Capacitor icons...');
-
-    dirsToClean.forEach(dirName => {
-        const dirPath = path.join(basePath, dirName);
-        if (fs.existsSync(dirPath)) {
-            filesToDelete.forEach(fileName => {
-                const filePath = path.join(dirPath, fileName);
-                if (fs.existsSync(filePath)) {
-                    try {
-                        fs.unlinkSync(filePath);
-                    } catch (e) {
-                        console.warn(`   Failed to delete ${filePath}`, e);
-                    }
-                }
-            });
-        }
-    });
-}
-
-function writeIconFiles() {
+function updateIcons() {
     if (!fs.existsSync(ANDROID_RES_PATH)) {
-        console.log('⚠️ Android res directory not found. Skipping icon update.');
+        console.log('⚠️ Android res directory not found.');
         return;
     }
 
-    cleanupDefaultIcons(ANDROID_RES_PATH);
+    // 1. 清理旧的 PNG 图标，防止冲突
+    const dirsToClean = [
+        'mipmap-mdpi', 'mipmap-hdpi', 'mipmap-xhdpi', 
+        'mipmap-xxhdpi', 'mipmap-xxxhdpi', 'drawable'
+    ];
+    const filesToDelete = [
+        'ic_launcher.png', 'ic_launcher_round.png', 
+        'ic_launcher_foreground.png', 'ic_launcher_background.png'
+    ];
 
-    const drawablePath = path.join(ANDROID_RES_PATH, 'drawable');
-    const anydpiPath = path.join(ANDROID_RES_PATH, 'mipmap-anydpi-v26');
+    dirsToClean.forEach(dir => {
+        const dirPath = path.join(ANDROID_RES_PATH, dir);
+        if (fs.existsSync(dirPath)) {
+            filesToDelete.forEach(f => {
+                const p = path.join(dirPath, f);
+                if (fs.existsSync(p)) fs.unlinkSync(p);
+            });
+        }
+    });
 
-    if (!fs.existsSync(drawablePath)) fs.mkdirSync(drawablePath, { recursive: true });
-    if (!fs.existsSync(anydpiPath)) fs.mkdirSync(anydpiPath, { recursive: true });
-
-    fs.writeFileSync(path.join(drawablePath, 'ic_launcher_foreground.xml'), FOREGROUND_XML);
-    fs.writeFileSync(path.join(drawablePath, 'ic_launcher_background.xml'), BACKGROUND_XML);
+    // 2. 确保目录存在
+    const drawableDir = path.join(ANDROID_RES_PATH, 'drawable');
+    const anydpiDir = path.join(ANDROID_RES_PATH, 'mipmap-anydpi-v26');
     
-    fs.writeFileSync(path.join(anydpiPath, 'ic_launcher.xml'), ADAPTIVE_ICON_XML);
-    fs.writeFileSync(path.join(anydpiPath, 'ic_launcher_round.xml'), ADAPTIVE_ICON_XML);
+    if (!fs.existsSync(drawableDir)) fs.mkdirSync(drawableDir, { recursive: true });
+    if (!fs.existsSync(anydpiDir)) fs.mkdirSync(anydpiDir, { recursive: true });
+
+    // 3. 写入新的矢量资源
+    fs.writeFileSync(path.join(drawableDir, 'ic_launcher_foreground.xml'), FOREGROUND_XML);
+    fs.writeFileSync(path.join(drawableDir, 'ic_launcher_background.xml'), BACKGROUND_XML);
     
-    console.log('✅ Android Adaptive Icons updated successfully (Dark Theme: Black BG + White Icon).');
+    // 4. 写入自适应配置
+    fs.writeFileSync(path.join(anydpiDir, 'ic_launcher.xml'), ADAPTIVE_ICON_XML);
+    fs.writeFileSync(path.join(anydpiDir, 'ic_launcher_round.xml'), ADAPTIVE_ICON_XML);
+
+    console.log('✅ Icon updated: Black BG + White Z (Vector)');
 }
 
-writeIconFiles();
+updateIcons();
