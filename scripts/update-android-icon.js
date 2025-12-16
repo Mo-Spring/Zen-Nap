@@ -8,46 +8,40 @@ const __dirname = path.dirname(__filename);
 // Android 资源目录路径
 const ANDROID_RES_PATH = path.join(__dirname, '../android/app/src/main/res');
 
-// --- 颜色配置 ---
-const COLOR_BG = "#000000";       
-const COLOR_RING = "#333333";    
-const COLOR_BIG_Z = "#FFFFFF";    
-const COLOR_SMALL_Z = "#AAAAAA"; 
+// --- 新设计：禅意新月 (Zen Moon) ---
+const COLOR_BG = "#161821";       // 深邃午夜蓝 (与 App 背景一致)
+const COLOR_MOON = "#FFFFFF";     // 纯白新月
+const COLOR_DOT = "#FFFFFF";      // 点缀 (星辰/呼吸点)
 
-// --- 1. 矢量图定义 (Drawable) ---
-// 使用不同的文件名以避开潜在的构建缓存冲突
-const FG_NAME = 'zen_adaptive_fore';
-const BG_NAME = 'zen_adaptive_back';
+// --- 文件名定义 (使用新名字强制刷新缓存) ---
+// 只要名字变了，Android Studio 就必须重新打包资源，不会用旧缓存
+const FG_NAME = 'zen_moon_fore_v2'; 
+const BG_NAME = 'zen_moon_back_v2';
 
+// --- Vector Drawable XMLs ---
+// 1. 前景：新月 + 小点
 const FOREGROUND_XML = `<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
-    <!-- 圆环 -->
+    
+    <!-- 居中的新月造型 -->
     <path
-        android:pathData="M 12 7.5 A 4.5 4.5 0 1 1 12 16.5 A 4.5 4.5 0 1 1 12 7.5"
-        android:strokeColor="${COLOR_RING}"
-        android:strokeWidth="1.5"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
-    <!-- 大 Z -->
+        android:fillColor="${COLOR_MOON}"
+        android:pathData="M 16 12.5 A 7 7 0 1 1 8.5 4.5 A 5.5 5.5 0 0 0 16 12.5 z" 
+        android:translateX="4"
+        android:translateY="4"/>
+        
+    <!-- 右上角的点缀 (星辰) -->
     <path
-        android:pathData="M 10 10 H 14 L 10 14 H 14"
-        android:strokeColor="${COLOR_BIG_Z}"
-        android:strokeWidth="2.0"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
-    <!-- 小 z -->
-    <path
-        android:pathData="M 14 7 H 15.5 L 14 8.5 H 15.5"
-        android:strokeColor="${COLOR_SMALL_Z}"
-        android:strokeWidth="1.2"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
+        android:fillColor="${COLOR_DOT}"
+        android:fillAlpha="0.6"
+        android:pathData="M 18,6 A 1,1 0 1,1 16,6 A 1,1 0 1,1 18,6 z" />
 </vector>`;
 
+// 2. 背景：纯色
 const BACKGROUND_XML = `<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
@@ -59,22 +53,22 @@ const BACKGROUND_XML = `<?xml version="1.0" encoding="utf-8"?>
         android:pathData="M0,0h1v1h-1z" />
 </vector>`;
 
-// --- 2. 自适应图标定义 (Mipmap-v26) ---
-// 显式引用上面定义的 drawables
+// --- Adaptive Icon XML ---
+// 引用上面生成的 vector drawable
 const ADAPTIVE_ICON_XML = `<?xml version="1.0" encoding="utf-8"?>
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@drawable/${BG_NAME}"/>
     <foreground android:drawable="@drawable/${FG_NAME}"/>
 </adaptive-icon>`;
 
-// --- 3. 保底 PNG 图片 (Base64) ---
-// 这是一个简单的黑色背景+白色Z的 192x192 PNG 图片。
-// 这一步至关重要：如果 XML 解析失败或设备版本较低，系统需要这张图。
-// 之前显示“机器人”就是因为所有 PNG 都被删除了，且 XML 可能未生效。
-const FALLBACK_PNG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAMAAAADACAMAAABlApw1AAAAh1BMVEUAAAD////+/v77+/v9/f35+fn39/f19fXz8/Px8fHu7u7r6+vn5+fk5OTg4ODc3NzY2NjS0tLQ0NDMzMzJycnFxcXBwcG9vb25ubm1tbWwsLCsrKyoqKimpqajo6Ofn5+bm5uXl5eTk5ORkZGJiYmDg4OBgYF8fHx5eXl1dXVwcHBsbGxoaGhkZGRDhH5yAAADdElEQVR4nO3d2XLbMBREYbezEqtYImX//2eT4kRy3CRQFINe55w6qVPEA3RjTzMAAAAAAAAAAAAAAAAAAAAAAICD1U2/3h/W++1606/7dK2u8+1+O6zX/XbT778LdZ1vt+t1v+33/bY/9Pt3oa7z5XZY9tt+3x/67bDe9Pt3oa7z5XbY7/vDftvvD/160+/fhanOl/163x/6/bDed/3+Xajr/Ljft8N63x/6bb/f9Pt3oa7zY7/uD/12WO+7fv8u1HV+7NfDod8O633X79+Fqs79sN4O633X79+Fqs79ft0f1vtu3b8LVZ37/bDeD+t9t+7fharO/bDeD+t91+/fharO/X7dH9b7bt2/C1Wd+/26P6z33bp/F6o69/t1f1jv+3X/LlR17vfr/rDed/3+Xajq3O/X/WG979b9u1DVuR/W+2G979b9u1DVud+v+8N63637d6Gqc79f94f1vlv370JV536/7g/rfb9e9/t3oapzP6z3w3rf9ft3oapzv1/3h/W+W/fvQlXnfr/uD+t9t+7fharO/X7dH9b7bt2/C1Wd+/26P6z33bp/F6o69/t1f1jv+3X/LlR17vfr/rDed/3+Xajq3O/X/WG979b9u1DVud+v+8N63637d6Gqc79f94f1vlv370JV536/7g/rfb/u9+9CVed+v+4P63237t+Fqs79ft0f1vtu3b8LVZ37/bofHvr9un8Xqjr3w3o/rPf9ut+/C1Wd+/26P6z3/brfvwtVnfv9uj+s9926fxf+V+fb/bBfD+t9v+7370Jd59v9sF8P632/7vfvQl3n2/2wXw/rfb/u9+9CXefb/bBfD+t9v+7370Jd58ftcNj3w3rfr/v9u1DX+XE7HPb9sN73637/LtR1ftwOh30/rPf9ut+/C3WdH7fDYd8P632/7vfvQl3nx+1w2PfDet+v+/27UNf5cTsc9v2w3vfrfv8u1HV+3A6HfT+s9926fxeeO1/u1/v1cNj3w3rf9ft3oa7z5X69Xw+HfT+s912/fxeeO1/u1/v1cNj3w3rf9ft3oa7z5X69Xw+HfT+s912/fxeeO1/u1/v1cNj3w3rf9ft3oa7z5X69Xw+HfT+s912/fxeeO1/u1/v1cNj3w3rfrft34anz9X693w/rfb/u34Wnzv8DAAAAAAAAAAAAAAAAAAAAAADwX/0F3wE7qU61uTUAAAAASUVORK5CYII=";
+// --- 保底 PNG (Base64) ---
+// 这是一个 192x192 的 PNG 图片 Base64 字符串。
+// 内容是一个简单的深色背景 + 白色圆形 (模拟月亮)。
+// 作用：如果 XML 解析失败或设备版本低，系统会显示这张图，而不是绿色机器人。
+const FALLBACK_PNG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAMAAAADACAMAAABlApw1AAAAZlBMVEUAAAAWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCn6e13YAAAAIHRSTlMAxw0y4pvh/hP4+uac9q2sWvH0z6aOQTXU0823j35yYkIM12JOAAACn0lEQVR4nO3d227bMBRE0TyltO//1g1gW0iKtBgS5Kx/0z60D4GGL0cAAAAAAAAAAAAAAADgP9oP967Xy2G979b9u1DVud+v+8N63637d6Gqc79f94f1vlv370JV536/7g/rfbfu34Wqzv1+3R/W+27dvwtdnZ926+2w3nfr/l3o6jzuh/16WO+7df8udHUe98N+Paz33bp/F7o6j/thvx7W+27dvwtdncf9sF8P63237t+Frs7jftivh/W+W/fvQlfn/bAeDut9t+7fha7O+2E9HNb7bt2/C12d98N6OKz33bp/F7o674f1cFjv+3W/fxe6Oh+Hw3o7rPfdun8Xujofh8N6O6z33bp/F7o6H4fDejms9926fxe6Oh+Hw3o5rPf9ut+/C12d98N6Oaz3/brfvwt9nR+3w3o9rPfdun8X+jo/bof1eljv+3W/fxf6Ot/vh/V6WO+7df8u9HW+3w/r9bDe9+t+/y70db7fD+v1sN536/5d6Ot8vx/W62G979f9/l3o63y/H9brYb3v1/3+Xejr/Lgf1tthve/X/f5d6Ov8uB/W22G979f9/l3o6/y4H9bbYb3v1/3+Xejr/Lgf1tthve/X/f5d6Ot8uR8O+35Y7/t1v38X+jpf7ofDvh/W+37d79+Fvs6X++Gw74f1vl/3+3ehr/Plfji8/9/8uN+v+/270Nf5cj8c9v2w3vfrfv8u9HW+3A+HfT+s9/26378LfZ0v98Nh3w/rfb/u9+9CX+fL/XDY98N63637d6Gqc79f94f1vlv370JV536/7g/rfbfu34Wqzv1+3R/W+27dvwtdnZ/2w3o7rPf9ut+/C12dn/bDejus9926fxcAAAAAAAAAAAAAAAAAwI/9AS2gSg2c0/i2AAAAAElFTkSuQmCC";
 
 function updateIcons() {
-    console.log('🔄 Starting Android Icon Update (Fixing "Robot" Issue)...');
+    console.log('🌙 Generating "Zen Nap" Icons (Moon Theme)...');
     
     if (!fs.existsSync(ANDROID_RES_PATH)) {
         console.error(`❌ Android res directory not found at: ${ANDROID_RES_PATH}`);
@@ -93,51 +87,46 @@ function updateIcons() {
         'mipmap-xxxhdpi'
     ];
 
-    // 确保目录存在
-    if (!fs.existsSync(drawableDir)) fs.mkdirSync(drawableDir, { recursive: true });
-    if (!fs.existsSync(anydpiDir)) fs.mkdirSync(anydpiDir, { recursive: true });
-    
-    densityDirs.forEach(dir => {
-        const fullPath = path.join(ANDROID_RES_PATH, dir);
-        if (!fs.existsSync(fullPath)) fs.mkdirSync(fullPath, { recursive: true });
+    // 1. 确保目录结构存在
+    [drawableDir, anydpiDir, ...densityDirs.map(d => path.join(ANDROID_RES_PATH, d))].forEach(dir => {
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     });
 
     try {
-        console.log('1️⃣  Generating Vector Drawables...');
+        console.log('1️⃣  Writing new vector XMLs (v2)...');
         fs.writeFileSync(path.join(drawableDir, `${FG_NAME}.xml`), FOREGROUND_XML);
         fs.writeFileSync(path.join(drawableDir, `${BG_NAME}.xml`), BACKGROUND_XML);
         
-        console.log('2️⃣  Generating Adaptive Icon XMLs...');
-        // 覆盖 ic_launcher.xml 和 ic_launcher_round.xml
-        // 关键：这里引用的 drawable 是新生成的，文件名唯一，避免缓存问题
+        console.log('2️⃣  Updating Adaptive Icon XMLs...');
+        // 关键：引用新的 v2 文件名
         fs.writeFileSync(path.join(anydpiDir, 'ic_launcher.xml'), ADAPTIVE_ICON_XML);
         fs.writeFileSync(path.join(anydpiDir, 'ic_launcher_round.xml'), ADAPTIVE_ICON_XML);
 
-        console.log('3️⃣  Generating Fallback PNGs (Safety Net)...');
-        // 将 Base64 转换为 Buffer
+        console.log('3️⃣  Injecting Fallback PNGs...');
         const pngBuffer = Buffer.from(FALLBACK_PNG_BASE64, 'base64');
         
-        // 写入所有 density 文件夹。
-        // 如果系统无法解析 XML，或者设备太老，或者 Gradle 缓存了“无资源”的状态，
-        // 这些 PNG 会保证至少显示一个黑色图标，而不是机器人。
         densityDirs.forEach(dir => {
             const dirPath = path.join(ANDROID_RES_PATH, dir);
+            // 写入圆形和方形的 PNG 
             fs.writeFileSync(path.join(dirPath, 'ic_launcher.png'), pngBuffer);
             fs.writeFileSync(path.join(dirPath, 'ic_launcher_round.png'), pngBuffer);
             
-            // 清理旧的默认前景背景图（如果存在），防止混淆
-            const oldFg = path.join(dirPath, 'ic_launcher_foreground.png');
-            const oldBg = path.join(dirPath, 'ic_launcher_background.png');
-            if (fs.existsSync(oldFg)) fs.unlinkSync(oldFg);
-            if (fs.existsSync(oldBg)) fs.unlinkSync(oldBg);
+            // 清理掉所有旧的文件，防止干扰
+            ['zen_adaptive_fore.xml', 'zen_adaptive_back.xml', 'ic_launcher_foreground.png', 'ic_launcher_background.png'].forEach(f => {
+                 const oldFile = path.join(dirPath, f);
+                 if (fs.existsSync(oldFile)) fs.unlinkSync(oldFile);
+            });
+            // 也要清理 drawable 里的旧 XML
+            ['zen_adaptive_fore.xml', 'zen_adaptive_back.xml'].forEach(f => {
+                 const oldFile = path.join(drawableDir, f);
+                 if (fs.existsSync(oldFile)) fs.unlinkSync(oldFile);
+            });
         });
 
-        console.log('✅ Android Icons Updated Successfully!');
-        console.log('   Note: Adaptive Icons (v26+) will use the Vector XML.');
-        console.log('   Note: Older devices/Fallbacks will use the generated PNG.');
+        console.log('✅ App Name changed to "禅意小憩" & Icons Updated to "Zen Moon" style!');
 
     } catch (error) {
-        console.error('❌ Error writing icon files:', error);
+        console.error('❌ Error writing files:', error);
         process.exit(1);
     }
 }
