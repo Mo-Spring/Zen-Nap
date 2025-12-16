@@ -1026,7 +1026,7 @@ export default function App() {
                   opacity: isAnimating ? 0 : 1
               }}
             >
-                <ZenAppIcon className="w-8 h-8 text-white/80" />
+                <ZenAppIcon className="w-12 h-12 text-white/80" />
                 <div className="text-lg tracking-wide font-medium">小憩</div>
                 <button 
                     onClick={() => setIsSettingsOpen(true)}
