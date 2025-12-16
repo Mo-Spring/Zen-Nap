@@ -41,7 +41,8 @@ jobs:
       run: |
         cd android
         chmod +x gradlew
-        # 添加 clean 任务以确保清除之前的构建缓存（解决图标不更新的问题）
+        # 强制清理构建缓存，确保新图标资源被重新打包
+        rm -rf app/build
         ./gradlew clean assembleDebug
         
     - name: Upload APK
