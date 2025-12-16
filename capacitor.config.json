@@ -1,6 +1,6 @@
 {
   "appId": "com.zennaptimer.app",
-  "appName": "Zen Nap Timer",
+  "appName": "禅意小憩",
   "webDir": "dist",
   "server": {
     "androidScheme": "https"
