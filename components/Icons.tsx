@@ -13,7 +13,7 @@ export const SettingsIcon = () => <Hexagon className="w-6 h-6 text-white/80" str
 export const BackIcon = () => <ChevronLeft className="w-8 h-8 text-white/90" strokeWidth={1.5} />;
 export const InfoIcon = () => <Info className="w-6 h-6 text-white/80" strokeWidth={1.5} />;
 
-// Zen App 图标：同步更新为 v6 设计 (美学叠加版)
+// Zen App 图标：同步更新为 v7 设计 (深蓝背景逻辑在父级，这里只管线条变细)
 export const ZenAppIcon = ({ className }: { className?: string }) => (
   <svg 
     viewBox="0 0 24 24" 
@@ -23,32 +23,25 @@ export const ZenAppIcon = ({ className }: { className?: string }) => (
     strokeLinecap="round" 
     strokeLinejoin="round"
   >
-    {/* 优雅的 C 型新月 */}
+    {/* 圆环 (变细 1.5 -> 1.2) */}
     <path 
-        d="M 11 3 A 9 9 0 1 0 11 21 A 7.5 7.5 0 0 1 11 3 Z" 
-        fill="currentColor"
-        strokeWidth="0"
+        d="M 12 7.5 A 4.5 4.5 0 1 1 12 16.5 A 4.5 4.5 0 1 1 12 7.5" 
+        strokeWidth="1.2" 
+        className="opacity-40" 
     />
     
-    {/* 大 Z (Cutout Mask / Background Stroke) */}
-    {/* 这里使用黑色描边模拟“切割”效果，适应 APP 的深色背景 */}
+    {/* 大 Z (变细 2 -> 1.5) */}
     <path 
-        d="M 13.5 12.5 H 17.5 L 13.5 16.5 H 17.5" 
-        stroke="black"
-        strokeWidth="3.5" 
-    />
-    
-    {/* 大 Z (White/Foreground) */}
-    <path 
-        d="M 13.5 12.5 H 17.5 L 13.5 16.5 H 17.5" 
-        strokeWidth="2" 
-    />
-    
-    {/* 小 Z */}
-    <path 
-        d="M 19.5 5.5 H 22 L 19.5 8 H 22" 
+        d="M 10 10 H 14 L 10 14 H 14" 
         strokeWidth="1.5" 
-        strokeOpacity="0.6"
+        className="opacity-100"
+    />
+    
+    {/* 小 z (变细 1.2 -> 1.0) */}
+    <path 
+        d="M 14 7 H 15.5 L 14 8.5 H 15.5" 
+        strokeWidth="1.0" 
+        className="opacity-70" 
     />
   </svg>
 );
