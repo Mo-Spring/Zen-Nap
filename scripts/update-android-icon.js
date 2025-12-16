@@ -8,13 +8,13 @@ const __dirname = path.dirname(__filename);
 // Android 资源目录路径
 const ANDROID_RES_PATH = path.join(__dirname, '../android/app/src/main/res');
 
-// --- 颜色配置 v7 (Deep Blue + Thinner Zs) ---
-const COLOR_BG = "#121629";       // 深邃夜空蓝
-const COLOR_ELEMENT = "#FFFFFF";  // 纯白元素
+// --- 颜色配置 v8 (White Background + Light Blue Elements) ---
+const COLOR_BG = "#FFFFFF";       // 纯白背景
+const COLOR_ELEMENT = "#3B82F6";  // 浅蓝色 (Tailwind Blue 500)
 
 // --- 1. 矢量图定义 (Drawable) ---
-const FG_NAME = 'zen_adaptive_fore_v7';
-const BG_NAME = 'zen_adaptive_back_v7';
+const FG_NAME = 'zen_adaptive_fore_v8';
+const BG_NAME = 'zen_adaptive_back_v8';
 
 const FOREGROUND_XML = `<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
@@ -22,22 +22,22 @@ const FOREGROUND_XML = `<?xml version="1.0" encoding="utf-8"?>
     android:height="108dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
-    <!-- 圆环 (变细，白色，半透明) -->
+    <!-- 圆环 (浅蓝，半透明) -->
     <path
         android:pathData="M 12 7.5 A 4.5 4.5 0 1 1 12 16.5 A 4.5 4.5 0 1 1 12 7.5"
         android:strokeColor="${COLOR_ELEMENT}"
-        android:strokeAlpha="0.3"
+        android:strokeAlpha="0.4"
         android:strokeWidth="1.2"
         android:strokeLineCap="round"
         android:strokeLineJoin="round" />
-    <!-- 大 Z (变细 2.0 -> 1.5) -->
+    <!-- 大 Z (浅蓝) -->
     <path
         android:pathData="M 10 10 H 14 L 10 14 H 14"
         android:strokeColor="${COLOR_ELEMENT}"
         android:strokeWidth="1.5"
         android:strokeLineCap="round"
         android:strokeLineJoin="round" />
-    <!-- 小 z (变细 1.2 -> 1.0) -->
+    <!-- 小 z (浅蓝，半透明) -->
     <path
         android:pathData="M 14 7 H 15.5 L 14 8.5 H 15.5"
         android:strokeColor="${COLOR_ELEMENT}"
@@ -66,10 +66,12 @@ const ADAPTIVE_ICON_XML = `<?xml version="1.0" encoding="utf-8"?>
 </adaptive-icon>`;
 
 // --- 3. 保底 PNG 图片 (Base64) ---
+// 注意：由于无法在 Node 脚本中实时生成 PNG，这里保留旧的 fallback。
+// 实际生效的是上面的 vector XML (适用于绝大多数 Android 8.0+ 设备)。
 const FALLBACK_PNG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAMAAAADACAMAAABlApw1AAAAZlBMVEUAAAAWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCkWGCn6e13YAAAAIHRSTlMAxw0y4pvh/hP4+uac9q2sWvH0z6aOQTXU0823j35yYkIM12JOAAACn0lEQVR4nO3d227bMBRE0TyltO//1g1gW0iKtBgS5Kx/0z60D4GGL0cAAAAAAAAAAAAAAADgP9oP967Xy2G979b9u1DVud+v+8N63637d6Gqc79f94f1vlv370JV536/7g/rfbfu34Wqzv1+3R/W+27dvwtdnZ926+2w3nfr/l3o6jzuh/16WO+7df8udHUe98N+Paz33bp/F7o6j/thvx7W+27dvwtdncf9sF8P63237t+Frs7jftivh/W+W/fvQlfn/bAeDut9t+7fha7O+2E9HNb7bt2/C12d98N6OKz33bp/F7o674f1cFjv+3W/fxe6Oh+Hw3o7rPfdun8Xujofh8N6O6z33bp/F7o6H4fDejms9926fxe6Oh+Hw3o5rPf9ut+/C12d98N6Oaz3/brfvwt9nR+3w3o9rPfdun8X+jo/bof1eljv+3W/fxf6Ot/vh/V6WO+7df8u9HW+3w/r9bDe9+t+/y70db7fD+v1sN536/5d6Ot8vx/W62G979f9/l3o6/y4H9bbYb3v1/3+Xejr/Lgf1tthve/X/f5d6Ot8uR8O+35Y7/t1v38X+jpf7ofDvh/W+37d79+Fvs6X++Gw74f1vl/3+3ehr/Plfji8/9/8uN+v+/270Nf5cj8c9v2w3vfrfv8u9HW+3A+HfT+s9/26378LfZ0v98Nh3w/rfb/u9+9CX+fL/XDY98N63637d6Gqc79f94f1vlv370JV536/7g/rfbfu34Wqzv1+3R/W+27dvwtdnZ/2w3o7rPf9ut+/C12dn/bDejus9926fxcAAAAAAAAAAAAAAAAAwI/9AS2gSg2c0/i2AAAAAElFTkSuQmCC";
 
 function updateIcons() {
-    console.log('🔄 Generating "Zen Sleep" Icons v7 (Deep Blue + Thin Zs)...');
+    console.log('🔄 Generating "Zen Sleep" Icons v8 (White BG + Blue Zs)...');
     
     if (!fs.existsSync(ANDROID_RES_PATH)) {
         console.error(`❌ Android res directory not found at: ${ANDROID_RES_PATH}`);
@@ -87,7 +89,7 @@ function updateIcons() {
     });
 
     try {
-        console.log('1️⃣  Writing new vector XMLs (v7)...');
+        console.log('1️⃣  Writing new vector XMLs (v8)...');
         fs.writeFileSync(path.join(drawableDir, `${FG_NAME}.xml`), FOREGROUND_XML);
         fs.writeFileSync(path.join(drawableDir, `${BG_NAME}.xml`), BACKGROUND_XML);
         
@@ -95,7 +97,7 @@ function updateIcons() {
         fs.writeFileSync(path.join(anydpiDir, 'ic_launcher.xml'), ADAPTIVE_ICON_XML);
         fs.writeFileSync(path.join(anydpiDir, 'ic_launcher_round.xml'), ADAPTIVE_ICON_XML);
 
-        console.log('3️⃣  Injecting Fallback PNGs...');
+        console.log('3️⃣  Injecting Fallback PNGs (Note: Using placeholder)...');
         const pngBuffer = Buffer.from(FALLBACK_PNG_BASE64, 'base64');
         
         densityDirs.forEach(dir => {
@@ -105,6 +107,7 @@ function updateIcons() {
             
             // 清理旧版本文件
             const oldFiles = [
+                'zen_adaptive_fore_v7.xml', 'zen_adaptive_back_v7.xml',
                 'zen_adaptive_fore.xml', 'zen_adaptive_back.xml',
                 'zen_sleep_fore_v6.xml', 'zen_sleep_back_v6.xml',
                 'ic_launcher_foreground.png', 'ic_launcher_background.png'
@@ -119,7 +122,7 @@ function updateIcons() {
             });
         });
 
-        console.log('✅ Icons Updated to "Zen Sleep v7"!');
+        console.log('✅ Icons Updated to "Zen Sleep v8"!');
 
     } catch (error) {
         console.error('❌ Error writing files:', error);
