@@ -13,7 +13,7 @@ export const SettingsIcon = () => <Hexagon className="w-6 h-6 text-white/80" str
 export const BackIcon = () => <ChevronLeft className="w-8 h-8 text-white/90" strokeWidth={1.5} />;
 export const InfoIcon = () => <Info className="w-6 h-6 text-white/80" strokeWidth={1.5} />;
 
-// Zen App 图标：同步更新为 Safe Zone 紧凑布局
+// Zen App 图标：同步更新为 v5 设计 (纤细新月 + 分离式 Z)
 export const ZenAppIcon = ({ className }: { className?: string }) => (
   <svg 
     viewBox="0 0 24 24" 
@@ -23,25 +23,24 @@ export const ZenAppIcon = ({ className }: { className?: string }) => (
     strokeLinecap="round" 
     strokeLinejoin="round"
   >
-    {/* 圆环 (Radius 4.5) */}
+    {/* 纤细新月 (Filled) */}
     <path 
-        d="M 12 7.5 A 4.5 4.5 0 1 1 12 16.5 A 4.5 4.5 0 1 1 12 7.5" 
-        strokeWidth="1.5" 
-        className="opacity-40" 
+        d="M 13 5 A 8 8 0 1 0 13 19 A 7.1 7.1 0 0 1 13 5 Z" 
+        fill="currentColor"
+        strokeWidth="0"
     />
     
     {/* 大 Z */}
     <path 
-        d="M 10 10 H 14 L 10 14 H 14" 
+        d="M 15 13 H 19 L 15 17 H 19" 
         strokeWidth="2" 
-        className="opacity-100"
     />
     
     {/* 小 z */}
     <path 
-        d="M 14 7 H 15.5 L 14 8.5 H 15.5" 
-        strokeWidth="1.2" 
-        className="opacity-70" 
+        d="M 20 5 H 23 L 20 8 H 23" 
+        strokeWidth="1.5" 
+        strokeOpacity="0.5"
     />
   </svg>
 );
