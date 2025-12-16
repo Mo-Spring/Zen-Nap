@@ -12,6 +12,7 @@ import { LocalNotifications } from '@capacitor/local-notifications';
 import { App as CapacitorApp } from '@capacitor/app';
 
 // --- DATA ---
+// Performance Optimization: Resized images to w=1080 for faster mobile loading
 const MODES: NapMode[] = [
   {
     id: 'custom',
@@ -20,7 +21,7 @@ const MODES: NapMode[] = [
     themeColor: '#94a3b8',
     accentColor: 'bg-slate-400',
     iconType: 'custom',
-    bgImage: 'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?q=80&w=2944&auto=format&fit=crop'
+    bgImage: 'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?q=80&w=1080&auto=format&fit=crop'
   },
   {
     id: 'scientific',
@@ -29,7 +30,7 @@ const MODES: NapMode[] = [
     themeColor: '#f472b6',
     accentColor: 'bg-pink-400',
     iconType: 'coffee',
-    bgImage: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=2946&auto=format&fit=crop'
+    bgImage: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=1080&auto=format&fit=crop'
   },
   {
     id: 'efficient',
@@ -38,7 +39,7 @@ const MODES: NapMode[] = [
     themeColor: '#4ade80',
     accentColor: 'bg-green-500',
     iconType: 'lightning',
-    bgImage: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?q=80&w=2560&auto=format&fit=crop'
+    bgImage: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?q=80&w=1080&auto=format&fit=crop'
   },
   {
     id: 'travel',
@@ -47,7 +48,7 @@ const MODES: NapMode[] = [
     themeColor: '#fbbf24',
     accentColor: 'bg-amber-400',
     iconType: 'plane',
-    bgImage: 'https://images.unsplash.com/photo-1500964757637-c85e8a162699?q=80&w=2000&auto=format&fit=crop'
+    bgImage: 'https://images.unsplash.com/photo-1500964757637-c85e8a162699?q=80&w=1080&auto=format&fit=crop'
   },
   {
     id: 'complete',
@@ -56,7 +57,7 @@ const MODES: NapMode[] = [
     themeColor: '#3b82f6',
     accentColor: 'bg-blue-600',
     iconType: 'bed',
-    bgImage: 'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?q=80&w=2613&auto=format&fit=crop'
+    bgImage: 'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?q=80&w=1080&auto=format&fit=crop'
   }
 ];
 
@@ -1025,7 +1026,7 @@ export default function App() {
                   opacity: isAnimating ? 0 : 1
               }}
             >
-                <ZenAppIcon className="w-12 h-12 text-white/80" />
+                <ZenAppIcon className="w-8 h-8 text-white/80" />
                 <div className="text-lg tracking-wide font-medium">小憩</div>
                 <button 
                     onClick={() => setIsSettingsOpen(true)}
@@ -1268,7 +1269,7 @@ export default function App() {
         >
             <div className="absolute inset-0 z-[-1]">
                 <img 
-                    src="https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?q=80&w=2940&auto=format&fit=crop" 
+                    src="https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?q=80&w=1080&auto=format&fit=crop" 
                     className="w-full h-full object-cover opacity-60 scale-110"
                     alt="Morning"
                 />
