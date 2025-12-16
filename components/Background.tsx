@@ -1,5 +1,4 @@
-
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { NapMode } from '../types';
 
 interface BackgroundProps {
@@ -10,27 +9,65 @@ interface BackgroundProps {
 export const Background: React.FC<BackgroundProps> = ({ activeModeId, modes }) => {
   // 获取当前激活模式的主题色，用于混合遮罩
   const activeColor = modes.find(m => m.id === activeModeId)?.themeColor || '#000000';
+  
+  // 跟踪图片加载状态
+  const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set());
+
+  // 预加载逻辑
+  useEffect(() => {
+    modes.forEach(mode => {
+      const img = new Image();
+      img.src = mode.bgImage;
+      img.onload = () => {
+        setLoadedImages(prev => {
+            const newSet = new Set(prev);
+            newSet.add(mode.id);
+            return newSet;
+        });
+      };
+    });
+  }, [modes]);
 
   return (
     <div className="fixed -inset-[100px] z-0 bg-black">
       {/* 
-        性能优化：预渲染所有模式的背景图片层叠在一起。
-        通过切换 opacity 来实现丝滑的 Cross-fade 效果，
-        避免直接切换 backgroundImage URL 导致的加载闪烁（黑屏）。
+        性能优化 v2：
+        1. 预加载图片
+        2. 在图片加载完成前，先显示纯色背景 (Theme Color)，避免加载时的空白或闪烁
+        3. 加载完成后，图片层淡入 (Opacity 0 -> 0.6)
       */}
-      {modes.map((mode) => (
-        <div 
-          key={mode.id}
-          className="absolute inset-0 bg-cover bg-center transition-opacity duration-700 ease-in-out will-change-[opacity]"
-          style={{ 
-            backgroundImage: `url(${mode.bgImage})`,
-            // 只有当前选中的模式显示，其他隐藏
-            opacity: mode.id === activeModeId ? 0.6 : 0,
-            // 优化：非激活图层不参与点击检测（虽然这里是背景）
-            pointerEvents: 'none',
-          }}
-        />
-      ))}
+      {modes.map((mode) => {
+         const isLoaded = loadedImages.has(mode.id);
+         const isActive = mode.id === activeModeId;
+         
+         return (
+            <React.Fragment key={mode.id}>
+                {/* 纯色占位层：当处于激活状态但图片还没加载好时显示 */}
+                <div 
+                    className="absolute inset-0 transition-opacity duration-700 ease-in-out"
+                    style={{
+                        backgroundColor: mode.themeColor,
+                        // 如果激活但未加载：显示 (0.3透明度作为底色)
+                        // 如果已加载：隐藏 (让图片层接管)
+                        // 如果不激活：隐藏
+                        opacity: isActive && !isLoaded ? 0.3 : 0, 
+                        pointerEvents: 'none',
+                    }}
+                />
+
+                {/* 图片层 */}
+                <div 
+                  className="absolute inset-0 bg-cover bg-center transition-opacity duration-700 ease-in-out will-change-[opacity]"
+                  style={{ 
+                    backgroundImage: `url(${mode.bgImage})`,
+                    // 只有当激活且加载完成时才显示
+                    opacity: isActive && isLoaded ? 0.6 : 0,
+                    pointerEvents: 'none',
+                  }}
+                />
+            </React.Fragment>
+         );
+      })}
       
       {/* 
         颜色混合层：使用 mix-blend-multiply 叠加主题色。
