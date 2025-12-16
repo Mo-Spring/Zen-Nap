@@ -1,8 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-  <!-- Ring -->
-  <path d="M 12 7.5 A 4.5 4.5 0 1 1 12 16.5 A 4.5 4.5 0 1 1 12 7.5" stroke-width="1.5" opacity="0.4" stroke="#000000" />
-  <!-- Big Z -->
-  <path d="M 10 10 H 14 L 10 14 H 14" stroke-width="2" stroke="#000000" />
-  <!-- Small z -->
-  <path d="M 14 7 H 15.5 L 14 8.5 H 15.5" stroke-width="1.2" opacity="0.7" stroke="#000000" />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
+  <rect width="24" height="24" fill="#161821"/>
+  <!-- Moon -->
+  <path fill="#FFFFFF" d="M 20 12.79 A 9 9 0 1 1 10.21 3 A 7 7 0 0 0 20 12.79 z" />
+  <!-- Star/Dot -->
+  <circle cx="18" cy="6" r="1.5" fill="#FFFFFF" fill-opacity="0.6" />
 </svg>
