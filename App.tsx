@@ -10,7 +10,7 @@ import { Filesystem, Directory } from '@capacitor/filesystem';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { App as CapacitorApp } from '@capacitor/app';
-import { Shortcuts } from 'capacitor-plugin-shortcuts';
+import { AppShortcuts } from '@capawesome/capacitor-app-shortcuts';
 
 // --- DATA ---
 // Performance Optimization: Resized images to w=1080 for faster mobile loading
@@ -871,34 +871,34 @@ export default function App() {
     if (Capacitor.isNativePlatform()) {
       const configureShortcuts = async () => {
         try {
-          await Shortcuts.set({
-            items: [
+          await AppShortcuts.set({
+            shortcuts: [
               {
                 id: 'scientific',
                 shortLabel: '科学小盹 10\'',
                 longLabel: '开始 10 分钟小憩',
-                icon: { android: 'shortcut_coffee' },
+                icon: 'shortcut_coffee',
                 data: { modeIndex: 1 }
               },
               {
                 id: 'efficient',
                 shortLabel: '高效午休 24\'',
                 longLabel: '开始 24 分钟午休',
-                icon: { android: 'shortcut_lightning' },
+                icon: 'shortcut_lightning',
                 data: { modeIndex: 2 }
               },
               {
                 id: 'settings',
                 shortLabel: '设置',
-                icon: { android: 'shortcut_settings' },
+                icon: 'shortcut_settings',
                 data: { action: 'open_settings' }
               }
             ]
           });
 
-          await Shortcuts.removeAllListeners();
+          await AppShortcuts.removeAllListeners();
           
-          Shortcuts.addListener('shortcut', (event) => {
+          AppShortcuts.addListener('click', (event) => {
             if (event.data) {
                if (event.data.action === 'open_settings') {
                    setIsSettingsOpen(true);
