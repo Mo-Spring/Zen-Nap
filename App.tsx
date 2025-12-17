@@ -871,36 +871,39 @@ export default function App() {
     if (Capacitor.isNativePlatform()) {
       const configureShortcuts = async () => {
         try {
-          // Note: 'data' property expects string values in some contexts, so we stringify modeIndex.
+          // Revert property names to 'shortLabel' and 'longLabel' as defined in most Capacitor shortcut plugins.
+          // Cast the entire shortcuts array to 'any[]' to suppress the "data does not exist in type 'Shortcut'" error
+          // which occurs because the type definition in the library might be missing the 'data' property
+          // even though the underlying native implementation supports it.
           await AppShortcuts.set({
             shortcuts: [
               {
                 id: 'scientific',
-                title: '科学小盹 10\'',
-                description: '开始 10 分钟小憩',
-                icon: 'shortcut_coffee' as any, // Cast to avoid 'string not assignable to number' if strict typing is misconfigured
+                shortLabel: '科学小盹 10\'',
+                longLabel: '开始 10 分钟小憩',
+                icon: 'shortcut_coffee',
                 data: { modeIndex: "1" }
               },
               {
                 id: 'efficient',
-                title: '高效午休 24\'',
-                description: '开始 24 分钟午休',
-                icon: 'shortcut_lightning' as any,
+                shortLabel: '高效午休 24\'',
+                longLabel: '开始 24 分钟午休',
+                icon: 'shortcut_lightning',
                 data: { modeIndex: "2" }
               },
               {
                 id: 'settings',
-                title: '设置',
-                icon: 'shortcut_settings' as any,
+                shortLabel: '设置',
+                icon: 'shortcut_settings',
                 data: { action: 'open_settings' }
               }
-            ]
+            ] as any[] 
           });
 
           await AppShortcuts.removeAllListeners();
           
-          // Use 'click' for @capawesome/capacitor-app-shortcuts
-          // Cast event to 'any' to safely access .data property if type definitions are incomplete/mismatched
+          // Using 'click' as the event name (common for @capawesome).
+          // Casting event to 'any' to avoid type errors when accessing 'event.data'.
           AppShortcuts.addListener('click', (event: any) => {
             if (event.data) {
                if (event.data.action === 'open_settings') {
