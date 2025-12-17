@@ -1,15 +1,16 @@
-import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect, useCallback } from 'react';
 import { Background } from './components/Background';
 import { CircularTimer } from './components/CircularTimer';
 import { WheelPicker } from './components/WheelPicker';
 import { IconMap, SettingsIcon, ZenAppIcon } from './components/Icons';
 import { AppState, NapMode, SessionStats } from './types';
-import { Play, ChevronUp, Music, X, Upload } from 'lucide-react';
+import { Play, ChevronUp, Music, X, Upload, Volume2, Pause, AlertCircle } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { App as CapacitorApp } from '@capacitor/app';
+import { Shortcuts } from 'capacitor-plugin-shortcuts';
 
 // --- DATA ---
 // Performance Optimization: Resized images to w=1080 for faster mobile loading
@@ -118,7 +119,7 @@ export default function App() {
   
   // Timer State
   const [timeLeft, setTimeLeft] = useState(0);
-  const [activeDuration, setActiveDuration] = useState(0); // 新增：当前活动的倒计时总时长（分钟），与选中的模式时长解耦
+  const [activeDuration, setActiveDuration] = useState(0); 
   const [endTime, setEndTime] = useState<Date | null>(null);
   const [startTime, setStartTime] = useState<Date | null>(null);
   const [sessionStats, setSessionStats] = useState<SessionStats | null>(null);
@@ -142,7 +143,7 @@ export default function App() {
   const audioRef = useRef<HTMLAudioElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const animationFrameRef = useRef<number | null>(null);
-  const intervalRef = useRef<any>(null); // Use any for NodeJS/Window timer type compatibility
+  const intervalRef = useRef<any>(null); 
   const stopIntervalRef = useRef<number | null>(null);
   const modeButtonsRef = useRef<(HTMLButtonElement | null)[]>([]);
   // Wake Lock Ref
@@ -158,8 +159,15 @@ export default function App() {
   const appStateRef = useRef(appState);
   const isSettingsOpenRef = useRef(isSettingsOpen);
   
+  // Dynamic Refs for Shortcuts Logic
+  const modeGuideMusicRef = useRef(modeGuideMusic);
+  const playAudioRef = useRef<((path: string, loop?: boolean) => void) | null>(null);
+  const startTimerInternalRef = useRef<((minutes: number) => Promise<void>) | null>(null);
+  const handleModeSelectRef = useRef<((idx: number) => void) | null>(null);
+
   useEffect(() => { appStateRef.current = appState; }, [appState]);
   useEffect(() => { isSettingsOpenRef.current = isSettingsOpen; }, [isSettingsOpen]);
+  useEffect(() => { modeGuideMusicRef.current = modeGuideMusic; }, [modeGuideMusic]);
   
   const currentMode = MODES[selectedModeIndex];
   const displayDuration = currentMode.id === 'custom' ? customDuration : currentMode.durationMinutes;
@@ -203,7 +211,7 @@ export default function App() {
   };
 
   // --- AUDIO HANDLERS ---
-  const playAudio = (trackPath: string | undefined, loop: boolean = false) => {
+  const playAudio = useCallback((trackPath: string | undefined, loop: boolean = false) => {
       if (!audioRef.current) return;
 
       if (!trackPath) {
@@ -240,7 +248,7 @@ export default function App() {
                 setPlayingAudioPath(null);
             });
       }
-  };
+  }, [playingAudioPath]);
 
   const stopAllAudio = () => {
     if (audioRef.current) {
@@ -285,7 +293,8 @@ export default function App() {
     }
   };
 
-  const stopTimer = async () => {
+  // Memoize stopTimer to prevent dependency cycles
+  const stopTimer = useCallback(async () => {
     if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
@@ -328,7 +337,7 @@ export default function App() {
             setIsAnimating(false);
         });
     });
-  };
+  }, []);
 
   // Keep a fresh ref to stopTimer for the event listener
   const stopTimerRef = useRef(stopTimer);
@@ -411,7 +420,7 @@ export default function App() {
             backButtonListener.remove();
         }
     };
-  }, []); 
+  }, [stopTimer]); 
 
   // 核心状态检查逻辑：用于恢复状态或触发闹钟
   const checkSessionState = () => {
@@ -589,7 +598,7 @@ export default function App() {
   // --- TIMER HANDLERS ---
 
   const handleModeSelect = (index: number) => {
-    if (appState !== AppState.IDLE || isAnimating) return;
+    // 这里不再检查 appState 或 isAnimating，允许快捷方式强制切换
     const newIndex = Math.max(0, Math.min(MODES.length - 1, index));
     setSelectedModeIndex(newIndex);
     
@@ -613,6 +622,10 @@ export default function App() {
   };
 
   const startTimerInternal = async (durationMinutes: number) => {
+    // 强制清理之前的状态，以防从 Shortcut 直接跳转
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+    
     setActiveDuration(durationMinutes);
     const durationSec = durationMinutes * 60;
     
@@ -625,21 +638,15 @@ export default function App() {
     // 持久化保存状态
     saveSessionToStorage(end, durationMinutes, selectedModeIndex, isSnoozing);
     
-    if (!sessionStats) {
-        setSessionStats({
-            startTime: now,
-            endTime: end,
-            durationSeconds: durationSec
-        });
-    } else {
-         setSessionStats(prev => prev ? { 
-           ...prev, 
-           endTime: end, 
-           durationSeconds: prev.durationSeconds + durationSec 
-         } : null);
-    }
+    // 重置或新建 Stats
+    setSessionStats({
+        startTime: now,
+        endTime: end,
+        durationSeconds: durationSec
+    });
     
     setAppState(AppState.RUNNING);
+    setIsAnimating(false); // 确保动画状态被重置
     await requestWakeLock();
 
     // Schedule Native Notification
@@ -652,18 +659,15 @@ export default function App() {
                     title: "小憩结束",
                     body: "时间到了，该起床了",
                     id: 1,
-                    // 使用 allowWhileIdle 确保在 Doze 模式下也能触发
                     schedule: { at: end, allowWhileIdle: true },
-                    sound: undefined, // 使用通道默认声音
+                    sound: undefined, 
                     actionTypeId: "NAP_FINISHED",
                     extra: {
                         modeId: currentMode.id
                     },
                     channelId: 'zen_nap_alarm_channel',
-                    // 常驻通知权限：设置为 ongoing 且不自动取消
                     ongoing: true,
                     autoCancel: false,
-                    // 注意：visibility 和 priority 在 schedule 中不直接生效，需依赖 Channel 配置
                 }]
             });
         } catch (e) {
@@ -675,8 +679,6 @@ export default function App() {
   const startTimer = () => {
     if (isAnimating || appState !== AppState.IDLE) return;
     
-    // Warm-up audio: Only play/pause to unlock audio context IF NO MUSIC IS PLAYING.
-    // If music is already playing (guide music), we let it continue playing during the nap.
     if (audioRef.current && audioRef.current.paused) {
         audioRef.current.play().then(() => {
             audioRef.current!.pause();
@@ -855,6 +857,86 @@ export default function App() {
     return { m, s };
   };
 
+  // --- SHORTCUTS SYNC & LISTENER (Placed here to access functions) ---
+  
+  // Update refs to latest function versions
+  useEffect(() => {
+    playAudioRef.current = playAudio;
+    startTimerInternalRef.current = startTimerInternal;
+    handleModeSelectRef.current = handleModeSelect;
+  }, [playAudio, startTimerInternal, handleModeSelect]);
+
+  // One-time Setup
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) {
+      const configureShortcuts = async () => {
+        try {
+          await Shortcuts.set({
+            items: [
+              {
+                id: 'scientific',
+                shortLabel: '科学小盹 10\'',
+                longLabel: '开始 10 分钟小憩',
+                icon: { android: 'shortcut_coffee' },
+                data: { modeIndex: 1 }
+              },
+              {
+                id: 'efficient',
+                shortLabel: '高效午休 24\'',
+                longLabel: '开始 24 分钟午休',
+                icon: { android: 'shortcut_lightning' },
+                data: { modeIndex: 2 }
+              },
+              {
+                id: 'settings',
+                shortLabel: '设置',
+                icon: { android: 'shortcut_settings' },
+                data: { action: 'open_settings' }
+              }
+            ]
+          });
+
+          await Shortcuts.removeAllListeners();
+          
+          Shortcuts.addListener('shortcut', (event) => {
+            if (event.data) {
+               if (event.data.action === 'open_settings') {
+                   setIsSettingsOpen(true);
+               } else if (typeof event.data.modeIndex === 'number') {
+                   const idx = event.data.modeIndex;
+                   
+                   // Use ref to call handleModeSelect
+                   if (handleModeSelectRef.current) {
+                       handleModeSelectRef.current(idx);
+                   }
+
+                   // Delay to allow state update and then auto-start
+                   setTimeout(() => {
+                       const mode = MODES[idx];
+                       
+                       // 1. Auto-play guide music if exists
+                       const guide = modeGuideMusicRef.current[mode.id];
+                       if (guide && playAudioRef.current) {
+                           playAudioRef.current(guide.path);
+                       }
+                       
+                       // 2. Start Timer using ref
+                       if (startTimerInternalRef.current) {
+                           startTimerInternalRef.current(mode.durationMinutes);
+                       }
+                   }, 300);
+               }
+            }
+          });
+        } catch (e) {
+          console.error("Shortcuts config error", e);
+        }
+      };
+      
+      configureShortcuts();
+    }
+  }, []);
+
   const { m, s } = formatTime(timeLeft);
   const StartIcon = IconMap[currentMode.iconType];
 
@@ -1026,7 +1108,7 @@ export default function App() {
                   opacity: isAnimating ? 0 : 1
               }}
             >
-                <ZenAppIcon className="w-12 h-12 text-white/80" />
+                <ZenAppIcon className="w-8 h-8 text-white/80" />
                 <div className="text-lg tracking-wide font-medium">小憩</div>
                 <button 
                     onClick={() => setIsSettingsOpen(true)}
