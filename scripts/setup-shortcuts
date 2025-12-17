@@ -1,0 +1,57 @@
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const ANDROID_DRAWABLE_PATH = path.join(__dirname, '../android/app/src/main/res/drawable');
+
+// 灰色图标颜色 (Material Design 风格)
+const ICON_COLOR = "#607D8B";
+
+// 定义图标路径数据 (SVG Paths)
+const ICONS = {
+    shortcut_coffee: `
+        <path android:fillColor="${ICON_COLOR}" android:pathData="M18,8h1a4,4 0,0 1,0 8h-1v1a2,2 0,0 1,-2 2H6a2,2 0,0 1,-2 -2V8a2,2 0,0 1,2 -2h12zM6,8v9h10V8H6zm12,2v4h1a2,2 0,0 0,0 -4h-1zM2,2h20v2H2V2z"/>
+    `,
+    shortcut_lightning: `
+        <path android:fillColor="${ICON_COLOR}" android:pathData="M13,2L3,14h9l-1,8 10,-12h-9l1,-8z"/>
+    `,
+    shortcut_settings: `
+        <path android:fillColor="${ICON_COLOR}" android:pathData="M12,15A3,3 0 1,1 12,9A3,3 0 0,1 12,15M19.4,15C19.32,15.74 19.14,16.43 18.89,17.1L21.41,19.06L19.06,21.41L17.1,18.89C16.43,19.14 15.74,19.32 15,19.4V22.5H11.66V19.4C10.92,19.32 10.23,19.14 9.56,18.89L7.6,21.41L5.25,19.06L7.77,17.1C7.5,16.43 7.34,15.74 7.26,15H4.14V11.66H7.26C7.34,10.92 7.5,10.23 7.77,9.56L5.25,7.6L7.6,5.25L9.56,7.77C10.23,7.5 10.92,7.34 11.66,7.26V4.14H15V7.26C15.74,7.34 16.43,7.5 17.1,7.77L19.06,5.25L21.41,7.6L18.89,9.56C19.14,10.23 19.32,10.92 19.4,11.66H22.5V15H19.4Z"/>
+    `
+};
+
+function generateXml(pathData) {
+    return `<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    ${pathData}
+</vector>`;
+}
+
+function setupShortcuts() {
+    console.log('⚡ Generating Shortcut Icons...');
+
+    if (!fs.existsSync(ANDROID_DRAWABLE_PATH)) {
+        console.warn('⚠️ Android drawable directory not found. Skipping shortcut icons.');
+        return;
+    }
+
+    try {
+        Object.entries(ICONS).forEach(([name, pathData]) => {
+            const filePath = path.join(ANDROID_DRAWABLE_PATH, `${name}.xml`);
+            fs.writeFileSync(filePath, generateXml(pathData));
+            console.log(`   -> Created ${name}.xml`);
+        });
+        console.log('✅ Shortcut icons ready!');
+    } catch (e) {
+        console.error('❌ Failed to create shortcut icons:', e);
+    }
+}
+
+setupShortcuts();
