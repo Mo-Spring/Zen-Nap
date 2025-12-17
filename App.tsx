@@ -871,29 +871,29 @@ export default function App() {
     if (Capacitor.isNativePlatform()) {
       const configureShortcuts = async () => {
         try {
-          // Revert property names to 'shortLabel' and 'longLabel' as defined in most Capacitor shortcut plugins.
-          // Cast the entire shortcuts array to 'any[]' to suppress the "data does not exist in type 'Shortcut'" error
-          // which occurs because the type definition in the library might be missing the 'data' property
-          // even though the underlying native implementation supports it.
+          // Correctly use 'title' and 'description' for @capawesome/capacitor-app-shortcuts
+          // Cast the entire shortcuts array to 'any[]' to suppress the build error:
+          // "...'data' does not exist in type 'Shortcut'". This is a workaround for
+          // a potentially incomplete TypeScript definition in the plugin.
           await AppShortcuts.set({
             shortcuts: [
               {
                 id: 'scientific',
-                shortLabel: '科学小盹 10\'',
-                longLabel: '开始 10 分钟小憩',
+                title: '科学小盹 10\'',
+                description: '开始 10 分钟小憩',
                 icon: 'shortcut_coffee',
                 data: { modeIndex: "1" }
               },
               {
                 id: 'efficient',
-                shortLabel: '高效午休 24\'',
-                longLabel: '开始 24 分钟午休',
+                title: '高效午休 24\'',
+                description: '开始 24 分钟午休',
                 icon: 'shortcut_lightning',
                 data: { modeIndex: "2" }
               },
               {
                 id: 'settings',
-                shortLabel: '设置',
+                title: '设置',
                 icon: 'shortcut_settings',
                 data: { action: 'open_settings' }
               }
@@ -902,32 +902,25 @@ export default function App() {
 
           await AppShortcuts.removeAllListeners();
           
-          // Using 'click' as the event name (common for @capawesome).
-          // Casting event to 'any' to avoid type errors when accessing 'event.data'.
+          // Fix: Corrected the event name for AppShortcuts.addListener from 'appShortcutClicked' to 'click' to match the plugin's API.
           AppShortcuts.addListener('click', (event: any) => {
-            if (event.data) {
-               if (event.data.action === 'open_settings') {
+            const shortcut = event.shortcut;
+            if (shortcut && shortcut.data) {
+               if (shortcut.data.action === 'open_settings') {
                    setIsSettingsOpen(true);
-               } else if (event.data.modeIndex) {
-                   // Parse back from string
-                   const idx = Number(event.data.modeIndex);
+               } else if (shortcut.data.modeIndex) {
+                   const idx = Number(shortcut.data.modeIndex);
                    
-                   // Use ref to call handleModeSelect
                    if (handleModeSelectRef.current) {
                        handleModeSelectRef.current(idx);
                    }
 
-                   // Delay to allow state update and then auto-start
                    setTimeout(() => {
                        const mode = MODES[idx];
-                       
-                       // 1. Auto-play guide music if exists
                        const guide = modeGuideMusicRef.current[mode.id];
                        if (guide && playAudioRef.current) {
                            playAudioRef.current(guide.path);
                        }
-                       
-                       // 2. Start Timer using ref
                        if (startTimerInternalRef.current) {
                            startTimerInternalRef.current(mode.durationMinutes);
                        }
