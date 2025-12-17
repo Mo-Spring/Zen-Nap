@@ -4,7 +4,7 @@ import { CircularTimer } from './components/CircularTimer';
 import { WheelPicker } from './components/WheelPicker';
 import { IconMap, SettingsIcon, ZenAppIcon } from './components/Icons';
 import { AppState, NapMode, SessionStats } from './types';
-import { Play, ChevronUp, Music, X, Upload, Volume2, Pause, AlertCircle } from 'lucide-react';
+import { Play, ChevronUp, Music, X, Upload } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { StatusBar, Style } from '@capacitor/status-bar';
@@ -871,26 +871,27 @@ export default function App() {
     if (Capacitor.isNativePlatform()) {
       const configureShortcuts = async () => {
         try {
+          // Note: 'data' property expects string values in some contexts, so we stringify modeIndex.
           await AppShortcuts.set({
             shortcuts: [
               {
                 id: 'scientific',
-                shortLabel: '科学小盹 10\'',
-                longLabel: '开始 10 分钟小憩',
-                icon: 'shortcut_coffee',
-                data: { modeIndex: 1 }
+                title: '科学小盹 10\'',
+                description: '开始 10 分钟小憩',
+                icon: 'shortcut_coffee' as any, // Cast to avoid 'string not assignable to number' if strict typing is misconfigured
+                data: { modeIndex: "1" }
               },
               {
                 id: 'efficient',
-                shortLabel: '高效午休 24\'',
-                longLabel: '开始 24 分钟午休',
-                icon: 'shortcut_lightning',
-                data: { modeIndex: 2 }
+                title: '高效午休 24\'',
+                description: '开始 24 分钟午休',
+                icon: 'shortcut_lightning' as any,
+                data: { modeIndex: "2" }
               },
               {
                 id: 'settings',
-                shortLabel: '设置',
-                icon: 'shortcut_settings',
+                title: '设置',
+                icon: 'shortcut_settings' as any,
                 data: { action: 'open_settings' }
               }
             ]
@@ -898,12 +899,15 @@ export default function App() {
 
           await AppShortcuts.removeAllListeners();
           
-          AppShortcuts.addListener('click', (event) => {
+          // Use 'click' for @capawesome/capacitor-app-shortcuts
+          // Cast event to 'any' to safely access .data property if type definitions are incomplete/mismatched
+          AppShortcuts.addListener('click', (event: any) => {
             if (event.data) {
                if (event.data.action === 'open_settings') {
                    setIsSettingsOpen(true);
-               } else if (typeof event.data.modeIndex === 'number') {
-                   const idx = event.data.modeIndex;
+               } else if (event.data.modeIndex) {
+                   // Parse back from string
+                   const idx = Number(event.data.modeIndex);
                    
                    // Use ref to call handleModeSelect
                    if (handleModeSelectRef.current) {
