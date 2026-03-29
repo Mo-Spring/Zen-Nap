@@ -5,12 +5,17 @@ import { WheelPicker } from './components/WheelPicker';
 import { IconMap, SettingsIcon, ZenAppIcon } from './components/Icons';
 import { AppState, NapMode, SessionStats } from './types';
 import { Play, Music, X, Upload } from 'lucide-react';
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { App as CapacitorApp } from '@capacitor/app';
-import AlarmChannel from './plugins/alarm-channel/index';
+
+// 原生闹钟频道插件（Java 端：plugins/alarm-channel/AlarmChannelPlugin.java）
+interface AlarmChannelPlugin {
+  createAlarmChannel(options: { channelId?: string; channelName?: string }): Promise<{ success: boolean }>;
+}
+const AlarmChannel = registerPlugin<AlarmChannelPlugin>('AlarmChannel');
 
 // --- DATA ---
 // Performance Optimization: Resized images to w=1080 for faster mobile loading
