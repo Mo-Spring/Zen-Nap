@@ -10,6 +10,7 @@ import { Filesystem, Directory } from '@capacitor/filesystem';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { App as CapacitorApp } from '@capacitor/app';
+import AlarmChannel from '../plugins/alarm-channel/index';
 
 // --- DATA ---
 // Performance Optimization: Resized images to w=1080 for faster mobile loading
@@ -353,36 +354,32 @@ export default function App() {
                 
                 await LocalNotifications.requestPermissions();
 
-                // 闹钟频道：走闹钟音量通道，循环响铃，锁屏可见
-                await LocalNotifications.createChannel({
-                    id: 'zen_nap_alarm_channel',
-                    name: '小憩闹钟',
-                    description: '小憩结束时的闹钟提醒',
-                    importance: 5,
-                    visibility: 1,
-                    vibration: true,
-                    lights: true,
-                    lightColor: '#FFFFFF',
-                    sound: 'default',
-                    audioAttributes: {
-                        usage: 4, // AudioAttributes.USAGE_ALARM → 走闹钟音量
-                        contentType: 2, // AudioAttributes.CONTENT_TYPE_SONIFICATION
-                    }
-                });
+                // 闹钟频道：通过原生插件创建，走闹钟音量通道
+                try {
+                    await AlarmChannel.createAlarmChannel({
+                        channelId: 'zen_nap_alarm_channel',
+                        channelName: '小憩闹钟',
+                    });
+                } catch (e) {
+                    console.warn('Native alarm channel failed, using fallback', e);
+                    // Fallback：用 Capacitor 创建普通频道（媒体音量）
+                    await LocalNotifications.createChannel({
+                        id: 'zen_nap_alarm_channel',
+                        name: '小憩闹钟',
+                        importance: 5,
+                        visibility: 1,
+                        vibration: true,
+                        sound: 'default',
+                    });
+                }
 
                 // 媒体频道：App 内播放引导音乐/白噪音用
                 await LocalNotifications.createChannel({
                     id: 'zen_nap_media_channel',
                     name: '小憩背景音乐',
-                    description: '引导音乐和提神音频',
                     importance: 3,
-                    visibility: 1,
                     vibration: false,
                     sound: undefined,
-                    audioAttributes: {
-                        usage: 1, // AudioAttributes.USAGE_MEDIA → 走媒体音量
-                        contentType: 2,
-                    }
                 });
 
                 LocalNotifications.addListener('localNotificationActionPerformed', (notification) => {
