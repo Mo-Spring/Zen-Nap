@@ -279,8 +279,11 @@ export default function App() {
 
     setAppState(AppState.ALARM);
     
-    if (globalWakeUpMusic?.path) {
-      // 唤醒音乐开启循环播放
+    // 先停掉正在播放的引导音乐，再播放唤醒音乐
+    stopAllAudio();
+    
+    if (globalWakeUpMusic?.path && !isRestored) {
+      // App 在前台时：用媒体音量播放自定义唤醒音乐（循环）
       playAudio(globalWakeUpMusic.path, true);
     }
   };
@@ -350,16 +353,36 @@ export default function App() {
                 
                 await LocalNotifications.requestPermissions();
 
+                // 闹钟频道：走闹钟音量通道，循环响铃，锁屏可见
                 await LocalNotifications.createChannel({
                     id: 'zen_nap_alarm_channel',
-                    name: 'Zen Nap Alarm',
-                    description: 'Notifications for nap completion',
+                    name: '小憩闹钟',
+                    description: '小憩结束时的闹钟提醒',
                     importance: 5,
                     visibility: 1,
                     vibration: true,
                     lights: true,
                     lightColor: '#FFFFFF',
-                    sound: 'default'
+                    sound: 'default',
+                    audioAttributes: {
+                        usage: 4, // AudioAttributes.USAGE_ALARM → 走闹钟音量
+                        contentType: 2, // AudioAttributes.CONTENT_TYPE_SONIFICATION
+                    }
+                });
+
+                // 媒体频道：App 内播放引导音乐/白噪音用
+                await LocalNotifications.createChannel({
+                    id: 'zen_nap_media_channel',
+                    name: '小憩背景音乐',
+                    description: '引导音乐和提神音频',
+                    importance: 3,
+                    visibility: 1,
+                    vibration: false,
+                    sound: undefined,
+                    audioAttributes: {
+                        usage: 1, // AudioAttributes.USAGE_MEDIA → 走媒体音量
+                        contentType: 2,
+                    }
                 });
 
                 LocalNotifications.addListener('localNotificationActionPerformed', (notification) => {
@@ -650,20 +673,20 @@ export default function App() {
             await LocalNotifications.schedule({
                 notifications: [{
                     title: "小憩结束",
-                    body: "时间到了，该起床了",
+                    body: "时间到了，该起床了 ☀️",
                     id: 1,
                     // 使用 allowWhileIdle 确保在 Doze 模式下也能触发
                     schedule: { at: end, allowWhileIdle: true },
-                    sound: undefined, // 使用通道默认声音
+                    // 关键：sound 设为 'default' 确保使用频道的闹钟音频流
+                    // allowWhileIdle + channel 的 USAGE_ALARM = 后台也能按闹钟音量响铃
+                    sound: 'default',
                     actionTypeId: "NAP_FINISHED",
                     extra: {
                         modeId: currentMode.id
                     },
                     channelId: 'zen_nap_alarm_channel',
-                    // 常驻通知权限：设置为 ongoing 且不自动取消
                     ongoing: true,
                     autoCancel: false,
-                    // 注意：visibility 和 priority 在 schedule 中不直接生效，需依赖 Channel 配置
                 }]
             });
         } catch (e) {
