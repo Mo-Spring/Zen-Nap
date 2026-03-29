@@ -10,7 +10,7 @@ import { Filesystem, Directory } from '@capacitor/filesystem';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { App as CapacitorApp } from '@capacitor/app';
-import AlarmChannel from '../plugins/alarm-channel/index';
+import AlarmChannel from './plugins/alarm-channel/index';
 
 // --- DATA ---
 // Performance Optimization: Resized images to w=1080 for faster mobile loading
@@ -368,7 +368,6 @@ export default function App() {
                         name: '小憩闹钟',
                         importance: 5,
                         visibility: 1,
-                        vibration: true,
                         sound: 'default',
                     });
                 }
@@ -378,7 +377,6 @@ export default function App() {
                     id: 'zen_nap_media_channel',
                     name: '小憩背景音乐',
                     importance: 3,
-                    vibration: false,
                     sound: undefined,
                 });
 
