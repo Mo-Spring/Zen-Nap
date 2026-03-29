@@ -36,6 +36,14 @@ jobs:
         npx cap add android
         npm run set-icon
         npx cap sync
+
+    - name: Add alarm permissions to AndroidManifest
+      run: |
+        MANIFEST="android/app/src/main/AndroidManifest.xml"
+        # 在 </manifest> 前插入闹钟相关权限
+        sed -i 's|</manifest>|  <!-- 闹钟精确调度 -->\n  <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />\n  <!-- Android 14+ 全屏闹钟弹窗 -->\n  <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />\n</manifest>|' "$MANIFEST"
+        echo "--- Updated AndroidManifest.xml ---"
+        cat "$MANIFEST"
         
     - name: Build APK
       run: |
