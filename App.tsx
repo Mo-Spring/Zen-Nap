@@ -723,7 +723,6 @@ export default function App() {
     stopAllAudio();
     setIsSnoozing(true);
     startTimerInternal(snoozeDuration);
-    setSlideY(0);
   };
 
   // --- GESTURE HANDLERS ---
