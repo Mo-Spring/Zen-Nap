@@ -4,7 +4,7 @@ import { CircularTimer } from './components/CircularTimer';
 import { WheelPicker } from './components/WheelPicker';
 import { IconMap, SettingsIcon, ZenAppIcon } from './components/Icons';
 import { AppState, NapMode, SessionStats } from './types';
-import { Play, ChevronUp, Music, X, Upload } from 'lucide-react';
+import { Play, Music, X, Upload } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { StatusBar, Style } from '@capacitor/status-bar';
@@ -128,8 +128,9 @@ export default function App() {
       modeId?: string;
   } | null>(null);
   
-  // Gesture State
-  const [slideY, setSlideY] = useState(0);
+  // Alarm Long Press State
+  const [alarmStopProgress, setAlarmStopProgress] = useState(0);
+  const alarmStopIntervalRef = useRef<number | null>(null);
   
   // Long Press to Stop State
   const [stopProgress, setStopProgress] = useState(0);
@@ -148,8 +149,7 @@ export default function App() {
   // Wake Lock Ref
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
   
-  // Gesture Refs
-  const dragStartY = useRef<number | null>(null);
+  // Gesture Refs (mode selector swipe)
   const touchStartX = useRef<number | null>(null);
   const touchEndX = useRef<number | null>(null);
   const isDragging = useRef(false);
@@ -821,50 +821,32 @@ export default function App() {
     }
   };
 
-  const handleAlarmTouchStart = (e: React.TouchEvent) => {
-    if (appState !== AppState.ALARM) return;
-    dragStartY.current = e.touches[0].clientY;
+  const handleAlarmPressStart = () => {
+    if (alarmStopIntervalRef.current) return;
+    const startTime = Date.now();
+    const DURATION = 1500;
+
+    const tick = () => {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / DURATION, 1);
+        setAlarmStopProgress(progress);
+
+        if (progress < 1) {
+            alarmStopIntervalRef.current = requestAnimationFrame(tick);
+        } else {
+            alarmStopIntervalRef.current = null;
+            completeSession();
+        }
+    };
+    alarmStopIntervalRef.current = requestAnimationFrame(tick);
   };
 
-  const handleAlarmTouchMove = (e: React.TouchEvent) => {
-    if (appState !== AppState.ALARM || dragStartY.current === null) return;
-    const currentY = e.touches[0].clientY;
-    const diff = dragStartY.current - currentY;
-    setSlideY(Math.max(0, Math.min(diff, 300)));
-  };
-
-  const handleAlarmTouchEnd = () => {
-    if (appState !== AppState.ALARM) return;
-    const SWIPE_THRESHOLD = 150; 
-    if (slideY > SWIPE_THRESHOLD) {
-        completeSession();
-    } else {
-        setSlideY(0);
+  const handleAlarmPressEnd = () => {
+    if (alarmStopIntervalRef.current) {
+        cancelAnimationFrame(alarmStopIntervalRef.current);
+        alarmStopIntervalRef.current = null;
+        setAlarmStopProgress(0);
     }
-    dragStartY.current = null;
-  };
-
-  const handleAlarmMouseDown = (e: React.MouseEvent) => {
-      if (appState !== AppState.ALARM) return;
-      dragStartY.current = e.clientY;
-  };
-
-  const handleAlarmMouseMove = (e: React.MouseEvent) => {
-      if (appState !== AppState.ALARM || dragStartY.current === null) return;
-      const currentY = e.clientY;
-      const diff = dragStartY.current - currentY;
-      setSlideY(Math.max(0, Math.min(diff, 300)));
-  };
-
-  const handleAlarmMouseUp = () => {
-      if (appState !== AppState.ALARM) return;
-      const SWIPE_THRESHOLD = 150;
-      if (slideY > SWIPE_THRESHOLD) {
-          completeSession();
-      } else {
-          setSlideY(0);
-      }
-      dragStartY.current = null;
   };
 
   const getWakeUpTimeString = () => {
@@ -890,11 +872,6 @@ export default function App() {
   return (
     <div 
       className="relative w-full h-full font-light touch-none"
-      onTouchMove={handleAlarmTouchMove} 
-      onTouchEnd={handleAlarmTouchEnd}
-      onMouseDown={handleAlarmMouseDown}
-      onMouseMove={handleAlarmMouseMove}
-      onMouseUp={handleAlarmMouseUp}
     >
       <Background activeModeId={currentMode.id} modes={MODES} />
       
@@ -1283,12 +1260,6 @@ export default function App() {
       {appState === AppState.ALARM && (
         <div 
           className="absolute inset-0 z-30 flex flex-col items-center justify-between pb-16 pt-20 overflow-hidden"
-          onTouchStart={handleAlarmTouchStart}
-          onTouchMove={handleAlarmTouchMove}
-          onTouchEnd={handleAlarmTouchEnd}
-          onMouseDown={handleAlarmMouseDown}
-          onMouseMove={handleAlarmMouseMove}
-          onMouseUp={handleAlarmMouseUp}
         >
             <div className="absolute inset-0 z-[-1]">
                 <img 
@@ -1325,16 +1296,42 @@ export default function App() {
                 </div>
             </div>
 
-            <div className="flex flex-col items-center w-full relative h-32 justify-end z-10">
-                <div 
-                    className="flex flex-col items-center transition-transform duration-100 ease-out cursor-pointer pb-8"
-                    style={{ transform: `translateY(-${slideY}px)` }}
-                >
-                    <ChevronUp className={`w-6 h-6 text-white/70 ${slideY > 150 ? '' : 'animate-bounce'}`} />
-                    <div className="text-white/70 text-sm mt-2 font-medium tracking-wide">
-                        {slideY > 150 ? "松手结束小憩" : "上滑停止唤醒"}
-                    </div>
+            <div className="flex flex-col items-center w-full relative pb-8 z-10">
+                <div className="relative flex items-center justify-center">
+                    <svg className="absolute w-[88px] h-[88px] pointer-events-none transform -rotate-90">
+                        <circle 
+                            r="42" 
+                            cx="44" 
+                            cy="44" 
+                            fill="transparent" 
+                            stroke="rgba(255,255,255,0.1)" 
+                            strokeWidth="2" 
+                        />
+                        <circle 
+                            r="42" 
+                            cx="44" 
+                            cy="44" 
+                            fill="transparent" 
+                            stroke="white" 
+                            strokeWidth="3" 
+                            strokeDasharray={2 * Math.PI * 42}
+                            strokeDashoffset={2 * Math.PI * 42 * (1 - alarmStopProgress)}
+                            strokeLinecap="round"
+                        />
+                    </svg>
+
+                    <button 
+                        onMouseDown={handleAlarmPressStart}
+                        onMouseUp={handleAlarmPressEnd}
+                        onMouseLeave={handleAlarmPressEnd}
+                        onTouchStart={handleAlarmPressStart}
+                        onTouchEnd={handleAlarmPressEnd}
+                        className="w-16 h-16 rounded-full border border-white/30 flex items-center justify-center text-white/80 backdrop-blur-md active:bg-white/10 transition-colors z-10"
+                    >
+                        <div className="w-3 h-3 bg-white rounded-[1px]" />
+                    </button>
                 </div>
+                <div className="mt-4 text-white/40 text-xs tracking-wider">长按停止唤醒</div>
             </div>
         </div>
       )}
