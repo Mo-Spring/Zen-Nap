@@ -69,8 +69,8 @@ public class AlarmChannelPlugin extends Plugin {
     public void playAlarmAudio(PluginCall call) {
         String uriStr = call.getString("uri");
         if (uriStr == null || uriStr.isEmpty()) {
-            call.reject("uri is required");
-            return;
+            // No custom music provided — fall back to system default alarm
+            uriStr = android.provider.Settings.System.DEFAULT_ALARM_ALERT_URI.toString();
         }
 
         boolean loop = call.getBoolean("loop", false);
