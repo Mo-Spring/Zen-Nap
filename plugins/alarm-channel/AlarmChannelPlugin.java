@@ -4,6 +4,8 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.content.Context;
 import android.media.AudioAttributes;
+import android.media.MediaPlayer;
+import android.net.Uri;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -13,6 +15,8 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 
 @CapacitorPlugin(name = "AlarmChannel")
 public class AlarmChannelPlugin extends Plugin {
+
+    private MediaPlayer mediaPlayer;
 
     @PluginMethod()
     public void createAlarmChannel(PluginCall call) {
@@ -35,7 +39,6 @@ public class AlarmChannelPlugin extends Plugin {
             channel.setShowBadge(true);
             channel.setLockscreenVisibility(android.app.Notification.VISIBILITY_PUBLIC);
 
-            // 关键：设置闹钟音频属性，走闹钟音量通道
             AudioAttributes audioAttributes = new AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_ALARM)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
@@ -56,5 +59,74 @@ public class AlarmChannelPlugin extends Plugin {
             result.put("message", "Requires Android O+");
             call.resolve(result);
         }
+    }
+
+    /**
+     * 使用 STREAM_ALARM 播放音频，走闹钟音量通道。
+     */
+    @PluginMethod()
+    public void playAlarmAudio(PluginCall call) {
+        String uriStr = call.getString("uri");
+        if (uriStr == null || uriStr.isEmpty()) {
+            call.reject("uri is required");
+            return;
+        }
+
+        boolean loop = call.getBoolean("loop", false);
+
+        try {
+            stopInternal();
+
+            Uri uri = Uri.parse(uriStr);
+            Context context = getContext();
+
+            mediaPlayer = new MediaPlayer();
+
+            AudioAttributes attrs = new AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ALARM)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .build();
+            mediaPlayer.setAudioAttributes(attrs);
+            mediaPlayer.setDataSource(context, uri);
+            mediaPlayer.setLooping(loop);
+            mediaPlayer.prepare();
+            mediaPlayer.start();
+
+            JSObject result = new JSObject();
+            result.put("success", true);
+            call.resolve(result);
+        } catch (Exception e) {
+            call.reject("Failed to play audio: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 停止闹钟音频播放。
+     */
+    @PluginMethod()
+    public void stopAlarmAudio(PluginCall call) {
+        stopInternal();
+        JSObject result = new JSObject();
+        result.put("success", true);
+        call.resolve(result);
+    }
+
+    private void stopInternal() {
+        if (mediaPlayer != null) {
+            try {
+                if (mediaPlayer.isPlaying()) {
+                    mediaPlayer.stop();
+                }
+                mediaPlayer.release();
+            } catch (Exception ignored) {
+            }
+            mediaPlayer = null;
+        }
+    }
+
+    @Override
+    protected void handleOnDestroy() {
+        super.handleOnDestroy();
+        stopInternal();
     }
 }
