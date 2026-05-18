@@ -126,12 +126,11 @@ public class AlarmChannelPlugin extends Plugin {
 
 @PluginMethod()
 public void scheduleAlarm(PluginCall call) {
-    Long triggerAtMillisValue = call.getData().getLong("triggerAtMillis");
-    if (triggerAtMillisValue == null || triggerAtMillisValue <= 0) {
+    long triggerAtMillis = call.getData().optLong("triggerAtMillis", 0L);
+    if (triggerAtMillis <= 0) {
         call.reject("triggerAtMillis is required");
         return;
     }
-    long triggerAtMillis = triggerAtMillisValue;
 
     String uriStr = call.getString("uri", "");
     boolean loop = call.getBoolean("loop", true);
