@@ -16,6 +16,8 @@ interface AlarmChannelPlugin {
   createAlarmChannel(options: { channelId?: string; channelName?: string }): Promise<{ success: boolean }>;
   playAlarmAudio(options: { uri: string; loop?: boolean }): Promise<{ success: boolean }>;
   stopAlarmAudio(): Promise<{ success: boolean }>;
+  scheduleAlarm(options: { uri?: string; triggerAtMillis: number; loop?: boolean }): Promise<{ success: boolean }>;
+  cancelScheduledAlarm(): Promise<{ success: boolean }>;
 }
 const AlarmChannel = registerPlugin<AlarmChannelPlugin>('AlarmChannel');
 
@@ -32,7 +34,7 @@ const MODES: NapMode[] = [
   },
   {
     id: 'scientific',
-    name: '科学小盹 10\'',
+    name: '科学小憩 10\'',
     durationMinutes: 10,
     themeColor: '#f472b6',
     accentColor: 'bg-pink-400',
@@ -228,9 +230,8 @@ export default function App() {
   };
 
   // 原生闹钟音频播放（走 STREAM_ALARM，闹钟音量通道）
-const playAlarmMusic = async (trackPath: string, loop: boolean = true) => {
+  const playAlarmMusic = async (trackPath: string, loop: boolean = true) => {
     if (!Capacitor.isNativePlatform()) {
-      // Web 端无原生闹钟通道，使用系统默认提示音
       if (!trackPath) {
         console.log("No alarm track on web, using default");
         return;
@@ -239,12 +240,33 @@ const playAlarmMusic = async (trackPath: string, loop: boolean = true) => {
       return;
     }
     try {
-      // 直接传 content:// URI 给 Java 插件，不要经过 convertFileSrc 转换
       await AlarmChannel.playAlarmAudio({ uri: trackPath, loop });
       setPlayingAudioPath(trackPath);
     } catch (e) {
       console.error("playAlarmMusic failed, falling back to media audio:", e);
       playAudio(trackPath, loop);
+    }
+  };
+
+  const scheduleNativeAlarmAudio = async (end: Date) => {
+    if (!Capacitor.isNativePlatform()) return;
+    try {
+      await AlarmChannel.scheduleAlarm({
+        uri: globalWakeUpMusic?.path || '',
+        triggerAtMillis: end.getTime(),
+        loop: true,
+      });
+    } catch (e) {
+      console.error("scheduleAlarm failed", e);
+    }
+  };
+
+  const cancelNativeAlarmAudio = async () => {
+    if (!Capacitor.isNativePlatform()) return;
+    try {
+      await AlarmChannel.cancelScheduledAlarm();
+    } catch (e) {
+      console.warn("cancelScheduledAlarm failed", e);
     }
   };
 
@@ -261,6 +283,7 @@ const playAlarmMusic = async (trackPath: string, loop: boolean = true) => {
         intervalRef.current = null;
     }
     clearSessionFromStorage();
+    await cancelNativeAlarmAudio();
     await releaseWakeLock();
 
     if (Capacitor.isNativePlatform()) {
@@ -275,8 +298,6 @@ const playAlarmMusic = async (trackPath: string, loop: boolean = true) => {
     setAppState(AppState.ALARM);
     stopAllAudio();
 
-    // Always play alarm through native plugin (USAGE_ALARM / alarm volume stream)
-    // If no custom music set, plugin falls back to system default alarm sound
     playAlarmMusic(globalWakeUpMusic?.path || '', true);
   };
 
@@ -294,6 +315,7 @@ const playAlarmMusic = async (trackPath: string, loop: boolean = true) => {
         stopIntervalRef.current = null;
     }
     clearSessionFromStorage();
+    await cancelNativeAlarmAudio();
     if (Capacitor.isNativePlatform()) {
         try {
             await LocalNotifications.cancel({ notifications: [{ id: 1 }] });
@@ -402,7 +424,7 @@ const playAlarmMusic = async (trackPath: string, loop: boolean = true) => {
         setSelectedModeIndex(session.modeIndex);
         setActiveDuration(session.durationMinutes);
         setIsSnoozing(session.isSnoozing);
-        setEndTime(new Date(session.endTime));
+              setEndTime(new Date(session.endTime));
         setStartTime(new Date(session.startTime));
         if (now >= session.endTime) {
             console.log("Session expired while backgrounded/killed. Triggering ALARM.");
@@ -593,17 +615,18 @@ const playAlarmMusic = async (trackPath: string, loop: boolean = true) => {
 
     if (Capacitor.isNativePlatform()) {
         try {
+            await scheduleNativeAlarmAudio(end);
             await LocalNotifications.cancel({ notifications: [{ id: 1 }] });
             await LocalNotifications.schedule({
                 notifications: [{
                     title: "小憩结束",
-                    body: "时间到了，该起床了 ☀️",
+                    body: "时间到了，该起床了",
                     id: 1,
                     schedule: { at: end, allowWhileIdle: true },
-                    sound: 'default',
+                    sound: undefined,
                     actionTypeId: "NAP_FINISHED",
                     extra: { modeId: currentMode.id },
-                    channelId: 'zen_nap_alarm_channel',
+                    channelId: 'zen_nap_media_channel',
                     ongoing: true,
                     autoCancel: false,
                 }]
@@ -761,7 +784,7 @@ const playAlarmMusic = async (trackPath: string, loop: boolean = true) => {
   const runningTimerSize = 250;
   const transitionClass = "transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)]";
   const stopTransitionClass = "transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]";
-
+  
   return (
     <div className="relative w-full h-full font-light touch-none">
       <Background activeModeId={currentMode.id} modes={MODES} />
@@ -1041,7 +1064,7 @@ const playAlarmMusic = async (trackPath: string, loop: boolean = true) => {
                             }
                         </span>
                     </button>
-                    <div className="flex items-center justify-center w-full">
+                                      <div className="flex items-center justify-center w-full">
                         <button
                             onClick={startTimer}
                             className={`w-20 h-20 bg-white rounded-full flex items-center justify-center transition-all duration-300 active:scale-95 group relative hover:scale-105 ${isAnimating ? 'scale-75 opacity-0' : ''}`}
@@ -1185,7 +1208,7 @@ const playAlarmMusic = async (trackPath: string, loop: boolean = true) => {
                     </div>
                     <div className="grid grid-cols-3 gap-4 mb-8">
                         <div>
-                            <div className="text-gray-500 text-xs mb-1">就寝</div>
+                            <div className="text-gray-500 text-xs mb-1">入睡</div>
                             <div className="text-white text-xl font-light">
                                 {sessionStats.startTime.toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit', hour12: false})}
                             </div>
