@@ -42,6 +42,8 @@ jobs:
         PLUGIN_DIR="android/app/src/main/java/com/zennaptimer/alarmchannel"
         mkdir -p "$PLUGIN_DIR"
         cp plugins/alarm-channel/AlarmChannelPlugin.java "$PLUGIN_DIR/"
+        cp plugins/alarm-channel/AlarmPlaybackService.java "$PLUGIN_DIR/"
+        cp plugins/alarm-channel/AlarmReceiver.java "$PLUGIN_DIR/"
         
         # 添加闹钟相关权限
         MANIFEST="android/app/src/main/AndroidManifest.xml"
