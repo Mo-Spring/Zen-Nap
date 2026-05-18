@@ -124,39 +124,39 @@ public class AlarmChannelPlugin extends Plugin {
         call.resolve(result);
     }
 
-    @PluginMethod()
-    public void scheduleAlarm(PluginCall call) {
-        Double triggerAtMillisValue = call.getDouble("triggerAtMillis");
-        if (triggerAtMillisValue == null || triggerAtMillisValue <= 0) {
-            call.reject("triggerAtMillis is required");
-            return;
-        }
-        long triggerAtMillis = triggerAtMillisValue.longValue();
-
-        String uriStr = call.getString("uri", "");
-        boolean loop = call.getBoolean("loop", true);
-        Context context = getContext();
-        AlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
-        if (alarmManager == null) {
-            call.reject("AlarmManager unavailable");
-            return;
-        }
-
-        PendingIntent pendingIntent = buildAlarmPendingIntent(context, uriStr, loop);
-        alarmManager.cancel(pendingIntent);
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            AlarmManager.AlarmClockInfo alarmClockInfo =
-                    new AlarmManager.AlarmClockInfo(triggerAtMillis, null);
-            alarmManager.setAlarmClock(alarmClockInfo, pendingIntent);
-        } else {
-            alarmManager.setExact(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent);
-        }
-
-        JSObject result = new JSObject();
-        result.put("success", true);
-        call.resolve(result);
+@PluginMethod()
+public void scheduleAlarm(PluginCall call) {
+    Long triggerAtMillisValue = call.getData().getLong("triggerAtMillis");
+    if (triggerAtMillisValue == null || triggerAtMillisValue <= 0) {
+        call.reject("triggerAtMillis is required");
+        return;
     }
+    long triggerAtMillis = triggerAtMillisValue;
+
+    String uriStr = call.getString("uri", "");
+    boolean loop = call.getBoolean("loop", true);
+    Context context = getContext();
+    AlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+    if (alarmManager == null) {
+        call.reject("AlarmManager unavailable");
+        return;
+    }
+
+    PendingIntent pendingIntent = buildAlarmPendingIntent(context, uriStr, loop);
+    alarmManager.cancel(pendingIntent);
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+        AlarmManager.AlarmClockInfo alarmClockInfo =
+                new AlarmManager.AlarmClockInfo(triggerAtMillis, null);
+        alarmManager.setAlarmClock(alarmClockInfo, pendingIntent);
+    } else {
+        alarmManager.setExact(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent);
+    }
+
+    JSObject result = new JSObject();
+    result.put("success", true);
+    call.resolve(result);
+}
 
     @PluginMethod()
     public void cancelScheduledAlarm(PluginCall call) {
