@@ -6,6 +6,7 @@ import android.content.Context;
 import android.media.AudioAttributes;
 import android.media.MediaPlayer;
 import android.net.Uri;
+import android.os.ParcelFileDescriptor;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -87,7 +88,21 @@ public class AlarmChannelPlugin extends Plugin {
                     .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
                     .build();
             mediaPlayer.setAudioAttributes(attrs);
-            mediaPlayer.setDataSource(context, uri);
+
+            // 使用 ContentResolver 打开 content:// URI，兼容 Capacitor Filesystem 插件返回的路径
+            if ("content".equals(uri.getScheme())) {
+                ParcelFileDescriptor pfd = context.getContentResolver().openFileDescriptor(uri, "r");
+                if (pfd != null) {
+                    mediaPlayer.setDataSource(pfd.getFileDescriptor());
+                    pfd.close();
+                } else {
+                    call.reject("Failed to open content URI: " + uriStr);
+                    return;
+                }
+            } else {
+                mediaPlayer.setDataSource(context, uri);
+            }
+
             mediaPlayer.setLooping(loop);
             mediaPlayer.prepare();
             mediaPlayer.start();
