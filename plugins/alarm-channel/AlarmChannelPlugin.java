@@ -2,10 +2,14 @@ package com.zennaptimer.alarmchannel;
 
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.app.AlarmManager;
+import android.app.PendingIntent;
 import android.content.Context;
+import android.content.Intent;
 import android.media.AudioAttributes;
 import android.media.MediaPlayer;
 import android.net.Uri;
+import android.os.Build;
 import android.os.ParcelFileDescriptor;
 
 import com.getcapacitor.JSObject;
@@ -18,6 +22,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 public class AlarmChannelPlugin extends Plugin {
 
     private MediaPlayer mediaPlayer;
+    private static final int ALARM_REQUEST_CODE = 1001;
 
     @PluginMethod()
     public void createAlarmChannel(PluginCall call) {
@@ -62,14 +67,10 @@ public class AlarmChannelPlugin extends Plugin {
         }
     }
 
-    /**
-     * 使用 STREAM_ALARM 播放音频，走闹钟音量通道。
-     */
     @PluginMethod()
     public void playAlarmAudio(PluginCall call) {
         String uriStr = call.getString("uri");
         if (uriStr == null || uriStr.isEmpty()) {
-            // No custom music provided — fall back to system default alarm
             uriStr = android.provider.Settings.System.DEFAULT_ALARM_ALERT_URI.toString();
         }
 
@@ -89,7 +90,6 @@ public class AlarmChannelPlugin extends Plugin {
                     .build();
             mediaPlayer.setAudioAttributes(attrs);
 
-            // 使用 ContentResolver 打开 content:// URI，兼容 Capacitor Filesystem 插件返回的路径
             if ("content".equals(uri.getScheme())) {
                 ParcelFileDescriptor pfd = context.getContentResolver().openFileDescriptor(uri, "r");
                 if (pfd != null) {
@@ -115,15 +115,80 @@ public class AlarmChannelPlugin extends Plugin {
         }
     }
 
-    /**
-     * 停止闹钟音频播放。
-     */
     @PluginMethod()
     public void stopAlarmAudio(PluginCall call) {
         stopInternal();
+        stopAlarmService();
         JSObject result = new JSObject();
         result.put("success", true);
         call.resolve(result);
+    }
+
+    @PluginMethod()
+    public void scheduleAlarm(PluginCall call) {
+        Double triggerAtMillisValue = call.getDouble("triggerAtMillis");
+        if (triggerAtMillisValue == null || triggerAtMillisValue <= 0) {
+            call.reject("triggerAtMillis is required");
+            return;
+        }
+        long triggerAtMillis = triggerAtMillisValue.longValue();
+
+        String uriStr = call.getString("uri", "");
+        boolean loop = call.getBoolean("loop", true);
+        Context context = getContext();
+        AlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+        if (alarmManager == null) {
+            call.reject("AlarmManager unavailable");
+            return;
+        }
+
+        PendingIntent pendingIntent = buildAlarmPendingIntent(context, uriStr, loop);
+        alarmManager.cancel(pendingIntent);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            AlarmManager.AlarmClockInfo alarmClockInfo =
+                    new AlarmManager.AlarmClockInfo(triggerAtMillis, null);
+            alarmManager.setAlarmClock(alarmClockInfo, pendingIntent);
+        } else {
+            alarmManager.setExact(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent);
+        }
+
+        JSObject result = new JSObject();
+        result.put("success", true);
+        call.resolve(result);
+    }
+
+    @PluginMethod()
+    public void cancelScheduledAlarm(PluginCall call) {
+        Context context = getContext();
+        AlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+        if (alarmManager != null) {
+            alarmManager.cancel(buildAlarmPendingIntent(context, "", true));
+        }
+        stopAlarmService();
+
+        JSObject result = new JSObject();
+        result.put("success", true);
+        call.resolve(result);
+    }
+
+    private PendingIntent buildAlarmPendingIntent(Context context, String uriStr, boolean loop) {
+        Intent intent = new Intent(context, AlarmReceiver.class);
+        intent.putExtra(AlarmPlaybackService.EXTRA_URI, uriStr);
+        intent.putExtra(AlarmPlaybackService.EXTRA_LOOP, loop);
+        return PendingIntent.getBroadcast(
+                context,
+                ALARM_REQUEST_CODE,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+    }
+
+    private void stopAlarmService() {
+        Context context = getContext();
+        Intent intent = new Intent(context, AlarmPlaybackService.class);
+        intent.setAction(AlarmPlaybackService.ACTION_STOP);
+        context.stopService(intent);
     }
 
     private void stopInternal() {
