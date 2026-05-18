@@ -228,12 +228,13 @@ export default function App() {
   };
 
   // 原生闹钟音频播放（走 STREAM_ALARM，闹钟音量通道）
-  const playAlarmMusic = async (trackPath: string, loop: boolean = true) => {
+const playAlarmMusic = async (trackPath: string, loop: boolean = true) => {
     if (!Capacitor.isNativePlatform()) {
       playAudio(trackPath, loop);
       return;
     }
     try {
+      // 直接传 content:// URI 给 Java 插件，不要经过 convertFileSrc 转换
       await AlarmChannel.playAlarmAudio({ uri: trackPath, loop });
       setPlayingAudioPath(trackPath);
     } catch (e) {
@@ -241,6 +242,7 @@ export default function App() {
       playAudio(trackPath, loop);
     }
   };
+
 
   // --- TIMER FUNCTIONS ---
   const finishTimer = async (isRestored = false) => {
