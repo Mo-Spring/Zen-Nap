@@ -230,6 +230,11 @@ export default function App() {
   // 原生闹钟音频播放（走 STREAM_ALARM，闹钟音量通道）
 const playAlarmMusic = async (trackPath: string, loop: boolean = true) => {
     if (!Capacitor.isNativePlatform()) {
+      // Web 端无原生闹钟通道，使用系统默认提示音
+      if (!trackPath) {
+        console.log("No alarm track on web, using default");
+        return;
+      }
       playAudio(trackPath, loop);
       return;
     }
@@ -258,11 +263,11 @@ const playAlarmMusic = async (trackPath: string, loop: boolean = true) => {
     clearSessionFromStorage();
     await releaseWakeLock();
 
-    if (Capacitor.isNativePlatform() && !isRestored) {
+    if (Capacitor.isNativePlatform()) {
         try {
             await LocalNotifications.cancel({ notifications: [{ id: 1 }] });
         } catch (e) { console.error(e); }
-        if ('vibrate' in navigator) {
+        if (!isRestored && 'vibrate' in navigator) {
             navigator.vibrate([1000, 500, 1000]);
         }
     }
@@ -270,10 +275,9 @@ const playAlarmMusic = async (trackPath: string, loop: boolean = true) => {
     setAppState(AppState.ALARM);
     stopAllAudio();
 
-    if (globalWakeUpMusic?.path && !isRestored) {
-      // 使用原生插件走闹钟音量通道播放唤醒音乐（循环）
-      playAlarmMusic(globalWakeUpMusic.path, true);
-    }
+    // Always play alarm through native plugin (USAGE_ALARM / alarm volume stream)
+    // If no custom music set, plugin falls back to system default alarm sound
+    playAlarmMusic(globalWakeUpMusic?.path || '', true);
   };
 
   const stopTimer = async () => {
